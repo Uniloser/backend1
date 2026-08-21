@@ -1,4 +1,6 @@
 import * as followsRepository from '../repositories/follows.repository';
+import * as usersRepository from '../repositories/users.repository';
+import * as notificationsService from './notifications.service';
 import { ApiError } from '../utils/ApiError';
 
 function assertNotSelf(followerId: string, followedId: string) {
@@ -9,7 +11,16 @@ function assertNotSelf(followerId: string, followedId: string) {
 
 export async function follow(followerId: string, followedId: string) {
 	assertNotSelf(followerId, followedId);
-	return followsRepository.follow(followerId, followedId);
+	const result = await followsRepository.follow(followerId, followedId);
+
+	void usersRepository
+		.findById(followerId)
+		.then((actor) =>
+			notificationsService.notifyNewFollower(followedId, followerId, actor?.username),
+		)
+		.catch((error) => console.error('new_follower notification failed', error));
+
+	return result;
 }
 
 export async function unfollow(followerId: string, followedId: string) {

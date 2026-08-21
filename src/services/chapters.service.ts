@@ -1,5 +1,6 @@
 import { ApiError } from '../utils/ApiError';
 import * as chaptersRepository from '../repositories/chapters.repository';
+import { enqueueNotifyFollowers } from '../jobs/notifyFollowers.job';
 import type {
 	CreateChapterInput,
 	ReorderChaptersInput,
@@ -64,7 +65,7 @@ export async function createChapter(storyId: string, userId: string, input: Crea
 	await requireStoryAuthor(storyId, userId);
 	const status = input.status ?? 'draft';
 
-	return chaptersRepository.createChapter({
+	const chapter = await chaptersRepository.createChapter({
 		story_id: storyId,
 		title: input.title,
 		content: input.content,
@@ -72,14 +73,27 @@ export async function createChapter(storyId: string, userId: string, input: Crea
 		chapter_order: await chaptersRepository.findNextChapterOrder(storyId),
 		published_at: status === 'published' ? new Date().toISOString() : null,
 	});
+
+	if (status === 'published') {
+		enqueueNotifyFollowers({
+			type: 'chapter_published',
+			authorId: userId,
+			storyId,
+			chapterId: chapter.id,
+			chapterTitle: chapter.title,
+		});
+	}
+
+	return chapter;
 }
 
 export async function updateChapter(chapterId: string, userId: string, input: UpdateChapterInput) {
 	const chapter = await requireChapter(chapterId);
 	await requireStoryAuthor(chapter.story_id, userId);
 	const update: Record<string, unknown> = { ...input };
+	const publishing = input.status === 'published' && chapter.status !== 'published';
 
-	if (input.status === 'published' && chapter.status !== 'published') {
+	if (publishing) {
 		update.published_at = new Date().toISOString();
 	}
 
@@ -87,7 +101,19 @@ export async function updateChapter(chapterId: string, userId: string, input: Up
 		update.published_at = null;
 	}
 
-	return chaptersRepository.updateChapter(chapterId, update);
+	const updated = await chaptersRepository.updateChapter(chapterId, update);
+
+	if (publishing) {
+		enqueueNotifyFollowers({
+			type: 'chapter_published',
+			authorId: userId,
+			storyId: chapter.story_id,
+			chapterId,
+			chapterTitle: updated.title ?? chapter.title,
+		});
+	}
+
+	return updated;
 }
 
 export async function deleteChapter(chapterId: string, userId: string) {
@@ -107,6 +133,3 @@ export async function reorderChapters(storyId: string, userId: string, input: Re
 
 	await chaptersRepository.reorderChapters(storyId, input.chapters);
 }
-// Chapter business-logic stub.
-// TODO: enforce story author ownership, published-versus-draft visibility,
-// automatic ordering, publication timestamps, and reorder validation.

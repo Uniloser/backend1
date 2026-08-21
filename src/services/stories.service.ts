@@ -1,4 +1,5 @@
 import * as storiesRepository from '../repositories/stories.repository';
+import { enqueueNotifyFollowers } from '../jobs/notifyFollowers.job';
 import { ApiError } from '../utils/ApiError';
 import type { CreateStoryInput, UpdateStoryInput } from '../validators/stories.schema';
 
@@ -44,8 +45,9 @@ export async function getStory(storyId: string, userId?: string) {
 export async function updateStory(storyId: string, userId: string, input: UpdateStoryInput) {
 	const story = await requireAuthor(storyId, userId);
 	const update: Record<string, unknown> = { ...input };
+	const publishing = input.status === 'published' && story.status !== 'published';
 
-	if (input.status === 'published' && story.status !== 'published') {
+	if (publishing) {
 		const chapterCount = await storiesRepository.countChapters(storyId);
 
 		if (chapterCount === 0) {
@@ -53,7 +55,18 @@ export async function updateStory(storyId: string, userId: string, input: Update
 		}
 	}
 
-	return storiesRepository.updateStory(storyId, update);
+	const updated = await storiesRepository.updateStory(storyId, update);
+
+	if (publishing) {
+		enqueueNotifyFollowers({
+			type: 'story_published',
+			authorId: userId,
+			storyId,
+			storyTitle: updated.title ?? story.title,
+		});
+	}
+
+	return updated;
 }
 
 export async function deleteStory(storyId: string, userId: string) {
@@ -64,7 +77,3 @@ export async function deleteStory(storyId: string, userId: string) {
 export async function listPublishedStoriesByAuthor(authorId: string) {
 	return storiesRepository.listPublishedStoriesByAuthor(authorId);
 }
-// Story business-logic stub.
-// TODO: enforce author ownership and defense-in-depth draft visibility.
-// TODO: prevent publishing a story with zero chapters; coordinate metadata
-// updates, delete policy, and like toggle behavior with repositories.

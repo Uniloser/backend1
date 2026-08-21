@@ -151,6 +151,8 @@ create table public.bookmarks (
 
 create index idx_bookmarks_user on public.bookmarks(user_id, updated_at desc);
 create index idx_bookmarks_story on public.bookmarks(story_id);
+create unique index idx_bookmarks_user_story_null_chapter
+  on public.bookmarks (user_id, story_id) where chapter_id is null;
 
 -- ============================================================
 -- NOTIFICATIONS (in-app activity for a user)

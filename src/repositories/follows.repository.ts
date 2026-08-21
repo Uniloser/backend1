@@ -44,5 +44,17 @@ export async function listFollowing(userId: string, limit: number, offset: numbe
 	if (error) throw error;
 	return data ?? [];
 }
+
+export async function listFollowerIds(authorId: string, limit: number, offset: number) {
+	const { data, error } = await getSupabaseAdmin()
+		.from('follows')
+		.select('follower_id')
+		.eq('followed_id', authorId)
+		.order('created_at', { ascending: false })
+		.range(offset, offset + limit - 1);
+
+	if (error) throw error;
+	return (data ?? []).map((row: { follower_id: string }) => row.follower_id);
+}
 // Follows-table repository stub.
 // TODO: own follow upsert/delete and follower/following list queries.
