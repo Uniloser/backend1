@@ -9,6 +9,7 @@ import usersRouter from './routes/users.routes';
 import commentsRouter from './routes/comments.routes';
 import feedRouter from './routes/feed.routes';
 import uploadsRouter from './routes/uploads.routes';
+import reportsRouter from './routes/reports.routes';
 import authRouter from './routes/auth.routes';
 import { errorHandler } from './middleware/errorHandler.middleware';
 
@@ -23,6 +24,7 @@ app.use(usersRouter);
 app.use(commentsRouter);
 app.use(feedRouter);
 app.use(uploadsRouter);
+app.use(reportsRouter);
 app.use(storiesRouter);
 app.use(chaptersRouter);
 app.use(errorHandler);
