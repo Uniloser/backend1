@@ -1,0 +1,259 @@
+-- ============================================================
+-- STORY APP SCHEMA
+-- Run this in Supabase SQL Editor (Project → SQL Editor → New Query)
+-- ============================================================
+
+-- Extensions
+create extension if not exists "uuid-ossp";
+create extension if not exists "pgcrypto";
+
+-- ============================================================
+-- USERS (profile table — extends Supabase auth.users)
+-- ============================================================
+create table public.users (
+  id uuid primary key references auth.users(id) on delete cascade,
+  username text unique not null,
+  display_name text,
+  bio text,
+  avatar_url text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index idx_users_username on public.users(username);
+
+-- ============================================================
+-- STORIES
+-- ============================================================
+create table public.stories (
+  id uuid primary key default uuid_generate_v4(),
+  author_id uuid not null references public.users(id) on delete cascade,
+  title text not null,
+  description text,
+  cover_url text,
+  genre text not null,
+  tags text[] default '{}',
+  status text not null default 'draft' check (status in ('draft', 'published')),
+  view_count integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index idx_stories_author on public.stories(author_id);
+create index idx_stories_genre on public.stories(genre);
+create index idx_stories_status on public.stories(status);
+create index idx_stories_tags on public.stories using gin(tags);
+create index idx_stories_created on public.stories(created_at desc);
+
+-- ============================================================
+-- CHAPTERS
+-- ============================================================
+create table public.chapters (
+  id uuid primary key default uuid_generate_v4(),
+  story_id uuid not null references public.stories(id) on delete cascade,
+  title text not null,
+  content text not null,
+  chapter_order integer not null,
+  status text not null default 'draft' check (status in ('draft', 'published')),
+  published_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (story_id, chapter_order)
+);
+
+create index idx_chapters_story on public.chapters(story_id);
+create index idx_chapters_status on public.chapters(status);
+
+-- ============================================================
+-- COMMENTS
+-- ============================================================
+create table public.comments (
+  id uuid primary key default uuid_generate_v4(),
+  chapter_id uuid not null references public.chapters(id) on delete cascade,
+  user_id uuid not null references public.users(id) on delete cascade,
+  text text not null,
+  created_at timestamptz not null default now()
+);
+
+create index idx_comments_chapter on public.comments(chapter_id);
+create index idx_comments_user on public.comments(user_id);
+
+-- ============================================================
+-- FOLLOWS (user follows user)
+-- ============================================================
+create table public.follows (
+  follower_id uuid not null references public.users(id) on delete cascade,
+  followed_id uuid not null references public.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (follower_id, followed_id),
+  check (follower_id != followed_id)
+);
+
+create index idx_follows_follower on public.follows(follower_id);
+create index idx_follows_followed on public.follows(followed_id);
+
+-- ============================================================
+-- LIKES (on stories)
+-- ============================================================
+create table public.likes (
+  user_id uuid not null references public.users(id) on delete cascade,
+  story_id uuid not null references public.stories(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, story_id)
+);
+
+create index idx_likes_story on public.likes(story_id);
+
+-- ============================================================
+-- READING PROGRESS
+-- ============================================================
+create table public.reading_progress (
+  user_id uuid not null references public.users(id) on delete cascade,
+  story_id uuid not null references public.stories(id) on delete cascade,
+  last_chapter_id uuid references public.chapters(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, story_id)
+);
+
+create index idx_reading_progress_user on public.reading_progress(user_id);
+
+-- ============================================================
+-- USER EVENTS (for future curation/recommendations)
+-- ============================================================
+create table public.user_events (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references public.users(id) on delete cascade,
+  event_type text not null check (event_type in ('view', 'like', 'follow', 'read_complete', 'abandon', 'search')),
+  story_id uuid references public.stories(id) on delete cascade,
+  chapter_id uuid references public.chapters(id) on delete cascade,
+  metadata jsonb default '{}',
+  created_at timestamptz not null default now()
+);
+
+create index idx_user_events_user on public.user_events(user_id);
+create index idx_user_events_story on public.user_events(story_id);
+create index idx_user_events_type on public.user_events(event_type);
+
+-- ============================================================
+-- updated_at auto-update trigger (reused across tables)
+-- ============================================================
+create or replace function public.set_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger trg_users_updated_at before update on public.users
+  for each row execute function public.set_updated_at();
+
+create trigger trg_stories_updated_at before update on public.stories
+  for each row execute function public.set_updated_at();
+
+create trigger trg_chapters_updated_at before update on public.chapters
+  for each row execute function public.set_updated_at();
+
+-- ============================================================
+-- ROW LEVEL SECURITY
+-- ============================================================
+alter table public.users enable row level security;
+alter table public.stories enable row level security;
+alter table public.chapters enable row level security;
+alter table public.comments enable row level security;
+alter table public.follows enable row level security;
+alter table public.likes enable row level security;
+alter table public.reading_progress enable row level security;
+alter table public.user_events enable row level security;
+
+-- USERS: anyone can view profiles, only owner can edit their own
+create policy "Users are viewable by everyone"
+  on public.users for select using (true);
+
+create policy "Users can update their own profile"
+  on public.users for update using (auth.uid() = id);
+
+create policy "Users can insert their own profile"
+  on public.users for insert with check (auth.uid() = id);
+
+-- STORIES: published stories viewable by everyone, drafts only by author
+create policy "Published stories are viewable by everyone"
+  on public.stories for select using (status = 'published' or author_id = auth.uid());
+
+create policy "Authors can insert their own stories"
+  on public.stories for insert with check (author_id = auth.uid());
+
+create policy "Authors can update their own stories"
+  on public.stories for update using (author_id = auth.uid());
+
+create policy "Authors can delete their own stories"
+  on public.stories for delete using (author_id = auth.uid());
+
+-- CHAPTERS: published chapters viewable by everyone, drafts only by story's author
+create policy "Published chapters are viewable by everyone"
+  on public.chapters for select using (
+    status = 'published'
+    or exists (select 1 from public.stories s where s.id = story_id and s.author_id = auth.uid())
+  );
+
+create policy "Authors can insert chapters on their own stories"
+  on public.chapters for insert with check (
+    exists (select 1 from public.stories s where s.id = story_id and s.author_id = auth.uid())
+  );
+
+create policy "Authors can update chapters on their own stories"
+  on public.chapters for update using (
+    exists (select 1 from public.stories s where s.id = story_id and s.author_id = auth.uid())
+  );
+
+create policy "Authors can delete chapters on their own stories"
+  on public.chapters for delete using (
+    exists (select 1 from public.stories s where s.id = story_id and s.author_id = auth.uid())
+  );
+
+-- COMMENTS: viewable by everyone, only author can insert as themselves, only owner can delete
+create policy "Comments are viewable by everyone"
+  on public.comments for select using (true);
+
+create policy "Users can insert their own comments"
+  on public.comments for insert with check (user_id = auth.uid());
+
+create policy "Users can delete their own comments"
+  on public.comments for delete using (user_id = auth.uid());
+
+-- FOLLOWS: viewable by everyone, only the follower can create/delete their own follow
+create policy "Follows are viewable by everyone"
+  on public.follows for select using (true);
+
+create policy "Users can follow as themselves"
+  on public.follows for insert with check (follower_id = auth.uid());
+
+create policy "Users can unfollow as themselves"
+  on public.follows for delete using (follower_id = auth.uid());
+
+-- LIKES: viewable by everyone, only the liker can create/delete their own like
+create policy "Likes are viewable by everyone"
+  on public.likes for select using (true);
+
+create policy "Users can like as themselves"
+  on public.likes for insert with check (user_id = auth.uid());
+
+create policy "Users can unlike as themselves"
+  on public.likes for delete using (user_id = auth.uid());
+
+-- READING PROGRESS: private to the user
+create policy "Users can view their own reading progress"
+  on public.reading_progress for select using (user_id = auth.uid());
+
+create policy "Users can insert their own reading progress"
+  on public.reading_progress for insert with check (user_id = auth.uid());
+
+create policy "Users can update their own reading progress"
+  on public.reading_progress for update using (user_id = auth.uid());
+
+-- USER EVENTS: private to the user, insert-only from client
+create policy "Users can view their own events"
+  on public.user_events for select using (user_id = auth.uid());
+
+create policy "Users can insert their own events"
+  on public.user_events for insert with check (user_id = auth.uid());
