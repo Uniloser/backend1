@@ -11,6 +11,7 @@ const router = Router();
 router.put('/stories/:id/progress', auth, asyncHandler(progressController.updateProgress));
 router.get('/library', auth, asyncHandler(progressController.getLibrary));
 router.get('/feed', auth, asyncHandler(feedController.getFeed));
+router.get('/discover/following', auth, asyncHandler(feedController.discoverFollowing));
 router.get('/discover', optionalAuth, asyncHandler(feedController.discover));
 router.get('/discover/trending', optionalAuth, asyncHandler(feedController.trending));
 router.get('/search', optionalAuth, asyncHandler(feedController.search));

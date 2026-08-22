@@ -14,6 +14,8 @@ router.get('/users/:username', optionalAuth, asyncHandler(usersController.getPub
 router.get('/users/:username/stories', optionalAuth, asyncHandler(usersController.getPublishedStories));
 router.post('/users/:id/follow', auth, asyncHandler(followsController.follow));
 router.delete('/users/:id/follow', auth, asyncHandler(followsController.unfollow));
+router.get('/users/:id/follow', auth, asyncHandler(followsController.getFollowStatus));
+router.get('/users/me/following', auth, asyncHandler(followsController.listMyFollowing));
 router.get('/users/:id/followers', optionalAuth, asyncHandler(followsController.listFollowers));
 router.get('/users/:id/following', optionalAuth, asyncHandler(followsController.listFollowing));
 

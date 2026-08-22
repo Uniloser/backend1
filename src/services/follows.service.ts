@@ -35,6 +35,10 @@ export function listFollowers(userId: string, limit: number, offset: number) {
 export function listFollowing(userId: string, limit: number, offset: number) {
 	return followsRepository.listFollowing(userId, limit, offset);
 }
+
+export function isFollowing(followerId: string, followedId: string) {
+	return followsRepository.isFollowing(followerId, followedId);
+}
 // Follow service stub.
 // TODO: reject follower_id === followed_id with a 400, then coordinate
 // idempotent follow/unfollow operations and follower/following reads.

@@ -1,9 +1,11 @@
 import { getSupabaseAdmin } from '../config/supabase';
 
+const storySelect = '*, author:users!stories_author_id_fkey(id, username, display_name, avatar_url)';
+
 export async function findStory(storyId: string) {
 	const { data, error } = await getSupabaseAdmin()
 		.from('stories')
-		.select('*')
+		.select(storySelect)
 		.eq('id', storyId)
 		.maybeSingle();
 
@@ -15,7 +17,7 @@ export async function createStory(input: Record<string, unknown>) {
 	const { data, error } = await getSupabaseAdmin()
 		.from('stories')
 		.insert(input)
-		.select()
+		.select(storySelect)
 		.single();
 
 	if (error) throw error;
@@ -27,7 +29,7 @@ export async function updateStory(storyId: string, input: Record<string, unknown
 		.from('stories')
 		.update(input)
 		.eq('id', storyId)
-		.select()
+		.select(storySelect)
 		.single();
 
 	if (error) throw error;
@@ -56,7 +58,7 @@ export async function countChapters(storyId: string) {
 export async function listPublishedStoriesByAuthor(authorId: string) {
 	const { data, error } = await getSupabaseAdmin()
 		.from('stories')
-		.select('*')
+		.select(storySelect)
 		.eq('author_id', authorId)
 		.eq('status', 'published')
 		.order('created_at', { ascending: false });
@@ -68,14 +70,10 @@ export async function listPublishedStoriesByAuthor(authorId: string) {
 export async function listStoriesByAuthor(authorId: string) {
 	const { data, error } = await getSupabaseAdmin()
 		.from('stories')
-		.select('*')
+		.select(storySelect)
 		.eq('author_id', authorId)
 		.order('updated_at', { ascending: false });
 
 	if (error) throw error;
 	return data ?? [];
 }
-// Stories-table repository stub.
-// TODO: implement story CRUD, published author listing, chapter-count lookup,
-// status/ownership queries, like upsert/delete, and denormalized like-count
-// increment/decrement where that optimization is enabled.

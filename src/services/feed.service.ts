@@ -40,6 +40,12 @@ export function trending(limit: number) {
 	return cached(`trending:${limit}`, () => feedRepository.listTrending(limit));
 }
 
+export function discoverFollowing(userId: string, limit = 20) {
+	return cached(`discover:following:${userId}:${limit}`, () => (
+		feedRepository.listFollowedStories(userId, limit)
+	));
+}
+
 export function search(query: string, limit: number, offset: number) {
 	return cached(`search:${query}:${limit}:${offset}`, () => (
 		feedRepository.searchStories(query, limit, offset)

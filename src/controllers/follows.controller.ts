@@ -26,6 +26,18 @@ export async function listFollowing(request: any, response: any) {
 	const following = await followsService.listFollowing(userId, limit, offset);
 	response.json({ data: following, pagination: { limit, offset } });
 }
+
+export async function getFollowStatus(request: any, response: any) {
+	const followedId = userIdSchema.parse(request.params.id);
+	const following = await followsService.isFollowing(request.user.id, followedId);
+	response.json({ data: { following } });
+}
+
+export async function listMyFollowing(request: any, response: any) {
+	const { limit, offset } = paginationSchema.parse(request.query);
+	const following = await followsService.listFollowing(request.user.id, limit, offset);
+	response.json({ data: following, pagination: { limit, offset } });
+}
 // Follow controller stub.
 // TODO: delegate follow/unfollow and follower/following list requests using
 // req.user.id for the follower identity.

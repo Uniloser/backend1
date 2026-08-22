@@ -1,4 +1,5 @@
 import * as storiesRepository from '../repositories/stories.repository';
+import * as followsRepository from '../repositories/follows.repository';
 import { enqueueNotifyFollowers } from '../jobs/notifyFollowers.job';
 import { ApiError } from '../utils/ApiError';
 import type { CreateStoryInput, UpdateStoryInput } from '../validators/stories.schema';
@@ -40,7 +41,11 @@ export async function getStory(storyId: string, userId?: string) {
 		throw new ApiError(404, 'Story not found');
 	}
 
-	return story;
+	const viewerFollowsAuthor = userId && userId !== story.author_id
+		? await followsRepository.isFollowing(userId, story.author_id)
+		: false;
+
+	return { ...story, viewer_follows_author: viewerFollowsAuthor };
 }
 
 export async function updateStory(storyId: string, userId: string, input: UpdateStoryInput) {

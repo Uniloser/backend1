@@ -13,6 +13,12 @@ export async function discover(request: any, response: any) {
 	response.json({ data: stories, pagination: { limit, offset } });
 }
 
+export async function discoverFollowing(request: any, response: any) {
+	const { limit } = discoveryQuerySchema.parse(request.query);
+	const stories = await feedService.discoverFollowing(request.user.id, limit);
+	response.json({ data: stories });
+}
+
 export async function trending(request: any, response: any) {
 	const { limit } = discoveryQuerySchema.parse(request.query);
 	const stories = await feedService.trending(limit);
