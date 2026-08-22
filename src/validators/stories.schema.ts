@@ -2,12 +2,15 @@ const { z } = require('zod') as {
 	z: any;
 };
 
+const contentType = z.enum(['text', 'comic']);
+
 const storyFields = {
 	title: z.string().trim().min(1).max(200),
 	description: z.string().trim().max(5_000).nullable().optional(),
 	genre: z.string().trim().min(1).max(80),
 	tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
 	cover_url: z.string().url().nullable().optional(),
+	content_type: contentType.optional(),
 };
 
 export const createStorySchema = z.object(storyFields);
@@ -23,6 +26,7 @@ export type CreateStoryInput = {
 	genre: string;
 	tags?: string[];
 	cover_url?: string | null;
+	content_type?: 'text' | 'comic';
 };
 
 export type UpdateStoryInput = Partial<CreateStoryInput> & {

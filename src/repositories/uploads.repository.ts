@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '../config/supabase';
 const bucketNames = {
 	cover: env.coverBucket,
 	avatar: env.avatarBucket,
+	panel: env.panelBucket,
 } as const;
 
 export async function uploadImage(

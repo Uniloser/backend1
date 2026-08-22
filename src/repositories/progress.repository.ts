@@ -12,13 +12,19 @@ export async function findChapterInStory(storyId: string, chapterId: string) {
 	return data;
 }
 
-export async function upsertProgress(userId: string, storyId: string, lastChapterId: string | null) {
+export async function upsertProgress(
+	userId: string,
+	storyId: string,
+	lastChapterId: string | null,
+	lastPanelIndex: number | null = null,
+) {
 	const { data, error } = await getSupabaseAdmin()
 		.from('reading_progress')
 		.upsert({
 			user_id: userId,
 			story_id: storyId,
 			last_chapter_id: lastChapterId,
+			last_panel_index: lastPanelIndex,
 			updated_at: new Date().toISOString(),
 		}, { onConflict: 'user_id,story_id' })
 		.select()

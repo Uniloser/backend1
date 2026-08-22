@@ -21,6 +21,7 @@ export const env = {
 	redisUrl: process.env.REDIS_URL,
 	coverBucket: process.env.SUPABASE_COVER_BUCKET ?? 'covers',
 	avatarBucket: process.env.SUPABASE_AVATAR_BUCKET ?? 'avatars',
+	panelBucket: process.env.SUPABASE_PANEL_BUCKET ?? 'panels',
 } as const;
 // Environment configuration stub.
 // TODO: validate and export the Supabase URL/key, Redis URL, server port, and

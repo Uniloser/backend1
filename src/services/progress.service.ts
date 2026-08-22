@@ -11,7 +11,12 @@ export async function updateProgress(userId: string, storyId: string, input: Pro
 		}
 	}
 
-	return progressRepository.upsertProgress(userId, storyId, input.last_chapter_id);
+	return progressRepository.upsertProgress(
+		userId,
+		storyId,
+		input.last_chapter_id,
+		input.last_panel_index ?? null,
+	);
 }
 
 export function getLibrary(userId: string) {

@@ -3,6 +3,7 @@ const helmet = require('helmet') as any;
 const cors = require('cors') as any;
 const morgan = require('morgan') as any;
 
+import panelsRouter from './routes/panels.routes';
 import chaptersRouter from './routes/chapters.routes';
 import storiesRouter from './routes/stories.routes';
 import usersRouter from './routes/users.routes';
@@ -33,6 +34,7 @@ app.use(bookmarksRouter);
 app.use(notificationsRouter);
 app.use(storiesRouter);
 app.use(chaptersRouter);
+app.use(panelsRouter);
 app.use(errorHandler);
 
 export default app;

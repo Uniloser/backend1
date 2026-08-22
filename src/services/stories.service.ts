@@ -28,6 +28,7 @@ export async function createStory(authorId: string, input: CreateStoryInput) {
 		...input,
 		author_id: authorId,
 		tags: input.tags ?? [],
+		content_type: input.content_type ?? 'text',
 		status: 'draft',
 	});
 }

@@ -1,5 +1,6 @@
 import { ApiError } from '../utils/ApiError';
 import * as chaptersRepository from '../repositories/chapters.repository';
+import * as panelsRepository from '../repositories/panels.repository';
 import { enqueueNotifyFollowers } from '../jobs/notifyFollowers.job';
 import type {
 	CreateChapterInput,
@@ -17,6 +18,8 @@ async function requireStoryAuthor(storyId: string, userId: string) {
 	if (story.author_id !== userId) {
 		throw new ApiError(403, 'Only the story author can manage chapters');
 	}
+
+	return story;
 }
 
 async function requireChapter(chapterId: string) {
@@ -29,6 +32,49 @@ async function requireChapter(chapterId: string) {
 	return chapter;
 }
 
+async function attachPanelMetadata(chapters: Array<Record<string, unknown>>) {
+	const comicChapterIds = chapters
+		.filter((chapter) => chapter.content_type === 'comic')
+		.map((chapter) => chapter.id as string);
+
+	if (comicChapterIds.length === 0) {
+		return chapters;
+	}
+
+	const counts = await panelsRepository.countPanelsByChapterIds(comicChapterIds);
+
+	return chapters.map((chapter) => (
+		chapter.content_type === 'comic'
+			? { ...chapter, panel_count: counts[chapter.id as string] ?? 0 }
+			: chapter
+	));
+}
+
+async function attachChapterPanels(chapter: Record<string, unknown>, userId?: string) {
+	if (chapter.content_type !== 'comic') {
+		return chapter;
+	}
+
+	if (chapter.status !== 'published') {
+		const story = await chaptersRepository.findStoryOwner(chapter.story_id as string);
+
+		if (!story || story.author_id !== userId) {
+			return { ...chapter, panels: [] };
+		}
+	}
+
+	const panels = await panelsRepository.listPanels(chapter.id as string);
+	return { ...chapter, panels, panel_count: panels.length };
+}
+
+async function validateComicPublish(chapterId: string) {
+	const panelCount = await panelsRepository.countPanels(chapterId);
+
+	if (panelCount === 0) {
+		throw new ApiError(400, 'Comic chapters must have at least one panel before publishing');
+	}
+}
+
 export async function listChapters(storyId: string, userId?: string) {
 	const story = await chaptersRepository.findStoryOwner(storyId);
 
@@ -37,19 +83,18 @@ export async function listChapters(storyId: string, userId?: string) {
 	}
 
 	const chapters = await chaptersRepository.listChapters(storyId);
+	const visible = story.author_id === userId
+		? chapters
+		: chapters.filter((chapter: { status: string }) => chapter.status === 'published');
 
-	if (story.author_id === userId) {
-		return chapters;
-	}
-
-	return chapters.filter((chapter: { status: string }) => chapter.status === 'published');
+	return attachPanelMetadata(visible);
 }
 
 export async function getChapter(chapterId: string, userId?: string) {
 	const chapter = await requireChapter(chapterId);
 
 	if (chapter.status === 'published') {
-		return chapter;
+		return attachChapterPanels(chapter, userId);
 	}
 
 	const story = await chaptersRepository.findStoryOwner(chapter.story_id);
@@ -58,21 +103,35 @@ export async function getChapter(chapterId: string, userId?: string) {
 		throw new ApiError(404, 'Chapter not found');
 	}
 
-	return chapter;
+	return attachChapterPanels(chapter, userId);
 }
 
 export async function createChapter(storyId: string, userId: string, input: CreateChapterInput) {
-	await requireStoryAuthor(storyId, userId);
+	const story = await requireStoryAuthor(storyId, userId);
 	const status = input.status ?? 'draft';
+	const contentType = input.content_type ?? (story.content_type === 'comic' ? 'comic' : 'text');
+
+	if (story.content_type === 'text' && contentType === 'comic') {
+		throw new ApiError(400, 'Cannot add comic chapters to a text story');
+	}
+
+	if (story.content_type === 'comic' && contentType === 'text') {
+		throw new ApiError(400, 'Cannot add text chapters to a comic story');
+	}
 
 	const chapter = await chaptersRepository.createChapter({
 		story_id: storyId,
 		title: input.title,
-		content: input.content,
+		content: contentType === 'comic' ? '' : (input.content ?? ''),
+		content_type: contentType,
 		status,
 		chapter_order: await chaptersRepository.findNextChapterOrder(storyId),
 		published_at: status === 'published' ? new Date().toISOString() : null,
 	});
+
+	if (status === 'published' && contentType === 'comic') {
+		await validateComicPublish(chapter.id);
+	}
 
 	if (status === 'published') {
 		enqueueNotifyFollowers({
@@ -84,14 +143,33 @@ export async function createChapter(storyId: string, userId: string, input: Crea
 		});
 	}
 
-	return chapter;
+	return contentType === 'comic'
+		? { ...chapter, panel_count: 0, panels: [] }
+		: chapter;
 }
 
 export async function updateChapter(chapterId: string, userId: string, input: UpdateChapterInput) {
 	const chapter = await requireChapter(chapterId);
-	await requireStoryAuthor(chapter.story_id, userId);
+	const story = await requireStoryAuthor(chapter.story_id, userId);
 	const update: Record<string, unknown> = { ...input };
 	const publishing = input.status === 'published' && chapter.status !== 'published';
+	const contentType = (input.content_type ?? chapter.content_type ?? story.content_type ?? 'text') as 'text' | 'comic';
+
+	if (input.content_type && input.content_type !== chapter.content_type) {
+		throw new ApiError(400, 'Chapter content type cannot be changed after creation');
+	}
+
+	if (contentType === 'comic' && input.content !== undefined && input.content.trim().length > 0) {
+		throw new ApiError(400, 'Comic chapters store content in panels, not text');
+	}
+
+	if (contentType === 'comic') {
+		update.content = '';
+	}
+
+	if (publishing && contentType === 'comic') {
+		await validateComicPublish(chapterId);
+	}
 
 	if (publishing) {
 		update.published_at = new Date().toISOString();
@@ -113,7 +191,7 @@ export async function updateChapter(chapterId: string, userId: string, input: Up
 		});
 	}
 
-	return updated;
+	return attachChapterPanels(updated, userId);
 }
 
 export async function deleteChapter(chapterId: string, userId: string) {

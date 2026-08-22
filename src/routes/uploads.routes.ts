@@ -8,11 +8,12 @@ import { asyncHandler } from '../utils/asyncHandler';
 const router = express.Router();
 const upload = multer({
 	storage: multer.memoryStorage(),
-	limits: { fileSize: 10 * 1024 * 1024 },
+	limits: { fileSize: 15 * 1024 * 1024 },
 });
 
 router.post('/uploads/cover', auth, upload.single('file'), asyncHandler(uploadsController.uploadCover));
 router.post('/uploads/avatar', auth, upload.single('file'), asyncHandler(uploadsController.uploadAvatar));
+router.post('/uploads/panel', auth, upload.single('file'), asyncHandler(uploadsController.uploadPanel));
 
 export default router;
 // Upload route stub.
