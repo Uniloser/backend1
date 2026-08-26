@@ -1,6 +1,7 @@
 import * as notificationsRepository from '../repositories/notifications.repository';
 import type { CreateNotificationInput } from '../repositories/notifications.repository';
 import { ApiError } from '../utils/ApiError';
+import { sendPushToUser } from './push.service';
 
 export async function createNotification(input: CreateNotificationInput) {
 	if (input.recipient_id === input.actor_id) {
@@ -9,6 +10,18 @@ export async function createNotification(input: CreateNotificationInput) {
 
 	const notification = await notificationsRepository.createNotification(input);
 	await notificationsRepository.createDeliveries(notification.id);
+	void sendPushToUser(
+		input.recipient_id,
+		input.title,
+		input.body ?? '',
+		{
+			notificationId: notification.id,
+			type: input.notification_type,
+			...input.data,
+		},
+	).catch((error) => {
+		console.error('[push] delivery failed', error);
+	});
 	return notification;
 }
 
