@@ -15,6 +15,7 @@ import bookmarksRouter from './routes/bookmarks.routes';
 import notificationsRouter from './routes/notifications.routes';
 import pushTokensRouter from './routes/pushTokens.routes';
 import blocksRouter from './routes/blocks.routes';
+import walletRouter from './routes/wallet.routes';
 import authRouter from './routes/auth.routes';
 import { errorHandler } from './middleware/errorHandler.middleware';
 
@@ -26,6 +27,7 @@ app.use(morgan('dev'));
 app.use(express.json());
 app.use(authRouter);
 app.use(blocksRouter);
+app.use(walletRouter);
 app.use(usersRouter);
 app.use(commentsRouter);
 app.use(feedRouter);

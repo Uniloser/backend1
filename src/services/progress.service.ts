@@ -1,4 +1,5 @@
 import * as progressRepository from '../repositories/progress.repository';
+import * as walletService from './wallet.service';
 import { ApiError } from '../utils/ApiError';
 import type { ProgressInput } from '../validators/progress.validator';
 
@@ -9,6 +10,22 @@ export async function updateProgress(userId: string, storyId: string, input: Pro
 		if (!chapter) {
 			throw new ApiError(400, 'The chapter does not belong to this story');
 		}
+	}
+
+	if (input.completed_chapter_id) {
+		const chapter = await progressRepository.findChapterInStory(storyId, input.completed_chapter_id);
+
+		if (!chapter) {
+			throw new ApiError(400, 'The completed chapter does not belong to this story');
+		}
+
+		await walletService.awardGems({
+			userId,
+			amount: 10,
+			reason: 'chapter_completed',
+			referenceId: input.completed_chapter_id,
+			idempotencyKey: `chapter_completed:${userId}:${input.completed_chapter_id}`,
+		});
 	}
 
 	return progressRepository.upsertProgress(
