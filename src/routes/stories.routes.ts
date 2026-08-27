@@ -11,6 +11,7 @@ const router = Router();
 
 router.get('/genres', asyncHandler(genresController.listGenres));
 router.post('/stories', auth, asyncHandler(storiesController.createStory));
+router.get('/stories/:id/recommendations', optionalAuth, asyncHandler(storiesController.getRecommendations));
 router.get('/stories/:id', optionalAuth, asyncHandler(storiesController.getStory));
 router.patch('/stories/:id', auth, asyncHandler(storiesController.updateStory));
 router.delete('/stories/:id', auth, asyncHandler(storiesController.deleteStory));

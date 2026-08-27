@@ -12,6 +12,11 @@ export async function getStory(request: any, response: any) {
 	response.json({ data: story });
 }
 
+export async function getRecommendations(request: any, response: any) {
+	const stories = await storiesService.getRecommendations(request.params.id);
+	response.json({ data: stories });
+}
+
 export async function updateStory(request: any, response: any) {
 	const input = updateStorySchema.parse(request.body);
 	const story = await storiesService.updateStory(request.params.id, request.user.id, input);

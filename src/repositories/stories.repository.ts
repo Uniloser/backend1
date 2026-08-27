@@ -77,3 +77,18 @@ export async function listStoriesByAuthor(authorId: string) {
 	if (error) throw error;
 	return data ?? [];
 }
+
+export async function listRecommendations(storyId: string, genreId: string, limit = 8) {
+	const { data, error } = await getSupabaseAdmin()
+		.from('stories')
+		.select(storySelect)
+		.eq('genre_id', genreId)
+		.eq('status', 'published')
+		.neq('id', storyId)
+		.order('view_count', { ascending: false })
+		.order('created_at', { ascending: false })
+		.limit(limit);
+
+	if (error) throw error;
+	return data ?? [];
+}

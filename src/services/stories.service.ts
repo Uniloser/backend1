@@ -92,3 +92,9 @@ export async function deleteStory(storyId: string, userId: string) {
 export async function listPublishedStoriesByAuthor(authorId: string) {
 	return storiesRepository.listPublishedStoriesByAuthor(authorId);
 }
+
+export async function getRecommendations(storyId: string, limit = 8) {
+	const story = await requireStory(storyId);
+	if (story.status !== 'published' || !story.genre_id) return [];
+	return storiesRepository.listRecommendations(storyId, story.genre_id, limit);
+}
