@@ -40,3 +40,33 @@ create policy "Active story ads are publicly readable"
 
 grant select on public.story_ads to anon, authenticated;
 grant insert on public.story_ad_events to anon, authenticated;
+
+-- Example campaign: replace the title filter with the published story you want to promote.
+insert into public.story_ads (
+	story_id,
+	title,
+	description,
+	image_url,
+	background_image_url,
+	button_text,
+	priority,
+	starts_at,
+	ends_at,
+	is_active
+)
+select
+	s.id,
+	'Pregnant and Rejected Mate',
+	'Some wounds do not bleed where anyone can see them.',
+	s.cover_url,
+	null,
+	'View more',
+	10,
+	now(),
+	now() + interval '30 days',
+	true
+from public.stories s
+where s.status = 'published'
+	and s.title = 'Pregnant and Rejected Mate'
+	and s.cover_url is not null
+limit 1;

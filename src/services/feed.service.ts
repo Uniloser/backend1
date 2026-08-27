@@ -1,5 +1,6 @@
 import { getRedis } from '../config/redis';
 import * as feedRepository from '../repositories/feed.repository';
+import * as genresService from './genres.service';
 
 async function cached<T>(key: string, loader: () => Promise<T>): Promise<T> {
 	const redis = getRedis();
@@ -31,9 +32,10 @@ export function getFeed(userId: string, limit = 20) {
 }
 
 export function discover(genre: string | undefined, limit: number, offset: number) {
-	return cached(`discover:${genre ?? 'all'}:${limit}:${offset}`, () => (
-		feedRepository.listByGenre(genre, limit, offset)
-	));
+	return cached(`discover:${genre ?? 'all'}:${limit}:${offset}`, async () => {
+		const genreId = await genresService.findGenreId(genre);
+		return feedRepository.listByGenre(genreId, limit, offset);
+	});
 }
 
 export function trending(limit: number) {

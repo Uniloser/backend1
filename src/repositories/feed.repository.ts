@@ -87,7 +87,7 @@ export async function listByGenre(genre: string | undefined, limit: number, offs
 		.range(offset, offset + limit - 1);
 
 	if (genre) {
-		query = query.eq('genre', genre);
+		query = query.eq('genre_id', genre);
 	}
 
 	const { data, error } = await query;

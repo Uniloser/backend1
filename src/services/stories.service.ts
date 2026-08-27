@@ -3,6 +3,7 @@ import * as followsRepository from '../repositories/follows.repository';
 import { enqueueNotifyFollowers } from '../jobs/notifyFollowers.job';
 import { ApiError } from '../utils/ApiError';
 import type { CreateStoryInput, UpdateStoryInput } from '../validators/stories.schema';
+import * as genresService from './genres.service';
 
 async function requireStory(storyId: string) {
 	const story = await storiesRepository.findStory(storyId);
@@ -25,8 +26,11 @@ async function requireAuthor(storyId: string, userId: string) {
 }
 
 export async function createStory(authorId: string, input: CreateStoryInput) {
+	const genre = await genresService.requireGenre(input.genre);
 	return storiesRepository.createStory({
 		...input,
+		genre: genre.name,
+		genre_id: genre.id,
 		author_id: authorId,
 		tags: input.tags ?? [],
 		content_type: input.content_type ?? 'text',
@@ -51,6 +55,11 @@ export async function getStory(storyId: string, userId?: string) {
 export async function updateStory(storyId: string, userId: string, input: UpdateStoryInput) {
 	const story = await requireAuthor(storyId, userId);
 	const update: Record<string, unknown> = { ...input };
+	if (input.genre) {
+		const genre = await genresService.requireGenre(input.genre);
+		update.genre = genre.name;
+		update.genre_id = genre.id;
+	}
 	const publishing = input.status === 'published' && story.status !== 'published';
 
 	if (publishing) {

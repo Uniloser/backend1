@@ -3,11 +3,12 @@ const { z } = require('zod') as {
 };
 
 const contentType = z.enum(['text', 'comic']);
+const genre = z.string().trim().min(1).max(80);
 
 const storyFields = {
 	title: z.string().trim().min(1).max(200),
 	description: z.string().trim().max(5_000).nullable().optional(),
-	genre: z.string().trim().min(1).max(80),
+	genre,
 	tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
 	cover_url: z.string().url().nullable().optional(),
 	content_type: contentType.optional(),
@@ -34,7 +35,7 @@ export type UpdateStoryInput = Partial<CreateStoryInput> & {
 };
 
 export const discoveryQuerySchema = z.object({
-	genre: z.string().trim().max(80).optional(),
+	genre: genre.optional(),
 	limit: z.coerce.number().int().min(1).max(100).default(20),
 	offset: z.coerce.number().int().min(0).default(0),
 });
