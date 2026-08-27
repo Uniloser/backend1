@@ -1,5 +1,6 @@
 create table public.story_ads (
 	id uuid primary key default uuid_generate_v4(),
+	author_id uuid not null references public.users(id) on delete cascade,
 	story_id uuid not null references public.stories(id) on delete cascade,
 	title text not null,
 	description text not null,
@@ -50,6 +51,14 @@ alter table public.story_ads add column if not exists status text not null defau
 alter table public.story_ads add column if not exists budget integer not null default 0;
 alter table public.story_ads add column if not exists spent integer not null default 0;
 
+alter table public.story_ads add column if not exists author_id uuid references public.users(id) on delete cascade;
+update public.story_ads a
+set author_id = s.author_id
+from public.stories s
+where a.author_id is null and a.story_id = s.id;
+alter table public.story_ads alter column author_id set not null;
+create index if not exists idx_story_ads_author_id on public.story_ads (author_id);
+
 create policy "Authors can manage promotions for their stories"
 	on public.story_ads for all using (
 		exists (select 1 from public.stories s where s.id = story_id and s.author_id = auth.uid())
@@ -59,6 +68,7 @@ create policy "Authors can manage promotions for their stories"
 
 -- Example campaign: replace the title filter with the published story you want to promote.
 insert into public.story_ads (
+	author_id,
 	story_id,
 	title,
 	description,
@@ -71,6 +81,7 @@ insert into public.story_ads (
 	is_active
 )
 select
+	s.author_id,
 	s.id,
 	'Pregnant and Rejected Mate',
 	'Some wounds do not bleed where anyone can see them.',

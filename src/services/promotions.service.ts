@@ -14,6 +14,7 @@ export async function create(authorId: string, input: CreatePromotionInput) {
 	if (!story.cover_url) throw new ApiError(400, 'A story needs a cover before it can be promoted');
 
 	return promotionsRepository.create({
+		author_id: authorId,
 		story_id: story.id,
 		title: story.title,
 		description: story.description ?? `Discover ${story.title}.`,
