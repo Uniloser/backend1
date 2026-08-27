@@ -19,6 +19,7 @@ import walletRouter from './routes/wallet.routes';
 import authRouter from './routes/auth.routes';
 import storyAdsRouter from './routes/storyAds.routes';
 import promotionsRouter from './routes/promotions.routes';
+import analyticsRouter from './routes/analytics.routes';
 import { errorHandler } from './middleware/errorHandler.middleware';
 
 const app = express();
@@ -35,6 +36,7 @@ app.use(commentsRouter);
 app.use(feedRouter);
 app.use(storyAdsRouter);
 app.use(promotionsRouter);
+app.use(analyticsRouter);
 app.use(uploadsRouter);
 app.use(reportsRouter);
 app.use(bookmarksRouter);
