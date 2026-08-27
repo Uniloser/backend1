@@ -17,6 +17,11 @@ export async function getCurrentStories(request: any, response: any) {
 	response.json({ data: stories });
 }
 
+export async function getCurrentFollowerCount(request: any, response: any) {
+	const count = await usersService.getCurrentFollowerCount(request.user.id);
+	response.json({ data: { count } });
+}
+
 export async function updateCurrentProfile(request: any, response: any) {
 	const input = updateProfileSchema.parse(request.body);
 	const profile = await usersService.updateCurrentProfile(request.user.id, input);

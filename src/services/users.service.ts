@@ -45,6 +45,10 @@ export async function getPublishedStories(username: string) {
 export function getCurrentStories(userId: string) {
 	return listStoriesByAuthor(userId);
 }
+
+export function getCurrentFollowerCount(userId: string) {
+	return usersRepository.countFollowers(userId);
+}
 // User service stub.
 // TODO: compose users.repository.js profile data with published story and
 // follower counts; enforce profile update permissions and input contracts.

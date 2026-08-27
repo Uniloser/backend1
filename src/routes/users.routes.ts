@@ -9,6 +9,7 @@ const router = Router();
 
 router.get('/users/me', auth, asyncHandler(usersController.getCurrentProfile));
 router.get('/users/me/stories', auth, asyncHandler(usersController.getCurrentStories));
+router.get('/users/me/follower-count', auth, asyncHandler(usersController.getCurrentFollowerCount));
 router.patch('/users/me', auth, asyncHandler(usersController.updateCurrentProfile));
 router.get('/users/:username', optionalAuth, asyncHandler(usersController.getPublicProfile));
 router.get('/users/:username/stories', optionalAuth, asyncHandler(usersController.getPublishedStories));
