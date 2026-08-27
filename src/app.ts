@@ -17,6 +17,7 @@ import pushTokensRouter from './routes/pushTokens.routes';
 import blocksRouter from './routes/blocks.routes';
 import walletRouter from './routes/wallet.routes';
 import authRouter from './routes/auth.routes';
+import storyAdsRouter from './routes/storyAds.routes';
 import { errorHandler } from './middleware/errorHandler.middleware';
 
 const app = express();
@@ -31,6 +32,7 @@ app.use(walletRouter);
 app.use(usersRouter);
 app.use(commentsRouter);
 app.use(feedRouter);
+app.use(storyAdsRouter);
 app.use(uploadsRouter);
 app.use(reportsRouter);
 app.use(bookmarksRouter);
