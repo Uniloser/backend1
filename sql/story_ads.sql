@@ -6,6 +6,10 @@ create table public.story_ads (
 	image_url text not null,
 	background_image_url text,
 	button_text text not null default 'View more',
+	promotion_type text not null default 'boost' check (promotion_type in ('boost', 'featured', 'reward')),
+	status text not null default 'active' check (status in ('draft', 'active', 'paused', 'completed')),
+	budget integer not null default 0 check (budget >= 0),
+	spent integer not null default 0 check (spent >= 0 and spent <= budget),
 	priority integer not null default 0,
 	starts_at timestamptz not null default now(),
 	ends_at timestamptz,
@@ -40,6 +44,18 @@ create policy "Active story ads are publicly readable"
 
 grant select on public.story_ads to anon, authenticated;
 grant insert on public.story_ad_events to anon, authenticated;
+
+alter table public.story_ads add column if not exists promotion_type text not null default 'boost';
+alter table public.story_ads add column if not exists status text not null default 'active';
+alter table public.story_ads add column if not exists budget integer not null default 0;
+alter table public.story_ads add column if not exists spent integer not null default 0;
+
+create policy "Authors can manage promotions for their stories"
+	on public.story_ads for all using (
+		exists (select 1 from public.stories s where s.id = story_id and s.author_id = auth.uid())
+	) with check (
+		exists (select 1 from public.stories s where s.id = story_id and s.author_id = auth.uid())
+	);
 
 -- Example campaign: replace the title filter with the published story you want to promote.
 insert into public.story_ads (
