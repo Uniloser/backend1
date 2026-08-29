@@ -95,6 +95,12 @@ export async function listPublishedStoriesByAuthor(authorId: string) {
 
 export async function getRecommendations(storyId: string, limit = 8) {
 	const story = await requireStory(storyId);
-	if (story.status !== 'published' || !story.genre_id) return [];
-	return storiesRepository.listRecommendations(storyId, story.genre_id, limit);
+	if (story.status !== 'published') return [];
+	let recs = await storiesRepository.listRecommendations(storyId, story.genre_id, limit);
+	if (recs.length < limit) {
+		const excludeIds = [storyId, ...recs.map((r: any) => r.id)];
+		const more = await storiesRepository.listPopularPublishedExcluding(excludeIds, limit - recs.length);
+		recs = [...recs, ...more];
+	}
+	return recs;
 }

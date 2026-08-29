@@ -78,13 +78,38 @@ export async function listStoriesByAuthor(authorId: string) {
 	return data ?? [];
 }
 
-export async function listRecommendations(storyId: string, genreId: string, limit = 8) {
-	const { data, error } = await getSupabaseAdmin()
+export async function listRecommendations(storyId: string, genreId?: string | null, limit = 8) {
+	let query = getSupabaseAdmin()
 		.from('stories')
 		.select(storySelect)
-		.eq('genre_id', genreId)
 		.eq('status', 'published')
-		.neq('id', storyId)
+		.neq('id', storyId);
+
+	if (genreId) {
+		query = query.eq('genre_id', genreId);
+	}
+
+	const { data, error } = await query
+		.order('view_count', { ascending: false })
+		.order('created_at', { ascending: false })
+		.limit(limit);
+
+	if (error) throw error;
+	return data ?? [];
+}
+
+export async function listPopularPublishedExcluding(excludeIds: string[], limit = 8) {
+	if (limit <= 0) return [];
+	let query = getSupabaseAdmin()
+		.from('stories')
+		.select(storySelect)
+		.eq('status', 'published');
+
+	if (excludeIds.length > 0) {
+		query = query.not('id', 'in', `(${excludeIds.join(',')})`);
+	}
+
+	const { data, error } = await query
 		.order('view_count', { ascending: false })
 		.order('created_at', { ascending: false })
 		.limit(limit);
