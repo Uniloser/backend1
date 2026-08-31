@@ -3,6 +3,7 @@ import {
 	createChapterSchema,
 	reorderChaptersSchema,
 	updateChapterSchema,
+	updateChapterStatusSchema,
 } from '../validators/chapters.schema';
 
 export async function listChapters(request: any, response: any) {
@@ -24,6 +25,13 @@ export async function createChapter(request: any, response: any) {
 export async function updateChapter(request: any, response: any) {
 	const input = updateChapterSchema.parse(request.body);
 	const chapter = await chaptersService.updateChapter(request.params.id, request.user.id, input);
+	response.json({ data: chapter });
+}
+
+// Handles PATCH /chapters/:id/status – the only endpoint allowed to change publication state.
+export async function updateChapterStatus(request: any, response: any) {
+	const input = updateChapterStatusSchema.parse(request.body);
+	const chapter = await chaptersService.updateChapterStatus(request.params.id, request.user.id, input);
 	response.json({ data: chapter });
 }
 
@@ -52,6 +60,3 @@ export async function saveAutosave(request: any, response: any) {
 	const data = await chaptersService.saveAutosave(request.params.id, request.user.id, content);
 	response.json({ data });
 }
-// Chapter controller stub.
-// TODO: validate chapter payloads and reorder arrays, then delegate ownership,
-// next-order assignment, publication timestamps, and resequencing to services.

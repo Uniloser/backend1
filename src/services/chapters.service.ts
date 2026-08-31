@@ -151,8 +151,15 @@ export async function createChapter(storyId: string, userId: string, input: Crea
 export async function updateChapter(chapterId: string, userId: string, input: UpdateChapterInput) {
 	const chapter = await requireChapter(chapterId);
 	const story = await requireStoryAuthor(chapter.story_id, userId);
-	const update: Record<string, unknown> = { ...input };
-	const publishing = input.status === 'published' && chapter.status !== 'published';
+
+	// Build a strict partial update – only include fields that were explicitly provided.
+	// This prevents auto-saves that only send { title, content } from touching status.
+	const update: Record<string, unknown> = {};
+
+	if (input.title !== undefined) {
+		update.title = input.title;
+	}
+
 	const contentType = (input.content_type ?? chapter.content_type ?? story.content_type ?? 'text') as 'text' | 'comic';
 
 	if (input.content_type && input.content_type !== chapter.content_type) {
@@ -163,20 +170,25 @@ export async function updateChapter(chapterId: string, userId: string, input: Up
 		throw new ApiError(400, 'Comic chapters store content in panels, not text');
 	}
 
-	if (contentType === 'comic') {
-		update.content = '';
+	if (input.content !== undefined) {
+		update.content = contentType === 'comic' ? '' : input.content;
 	}
+
+	// Only mutate status / published_at when status is explicitly provided AND changing.
+	const statusChanging = input.status !== undefined && input.status !== chapter.status;
+	const publishing = input.status === 'published' && chapter.status !== 'published';
 
 	if (publishing && contentType === 'comic') {
 		await validateComicPublish(chapterId);
 	}
 
-	if (publishing) {
-		update.published_at = new Date().toISOString();
-	}
-
-	if (input.status === 'draft') {
-		update.published_at = null;
+	if (statusChanging) {
+		update.status = input.status;
+		if (input.status === 'published') {
+			update.published_at = new Date().toISOString();
+		} else if (input.status === 'draft') {
+			update.published_at = null;
+		}
 	}
 
 	const updated = await chaptersRepository.updateChapter(chapterId, update);
@@ -192,6 +204,11 @@ export async function updateChapter(chapterId: string, userId: string, input: Up
 	}
 
 	return attachChapterPanels(updated, userId);
+}
+
+// Dedicated status-transition helper used by PATCH /chapters/:id/status.
+export async function updateChapterStatus(chapterId: string, userId: string, input: { status: 'draft' | 'published' }) {
+	return updateChapter(chapterId, userId, { status: input.status });
 }
 
 export async function deleteChapter(chapterId: string, userId: string) {

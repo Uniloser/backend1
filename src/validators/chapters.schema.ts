@@ -4,14 +4,16 @@ const { z } = require('zod') as {
 
 const contentType = z.enum(['text', 'comic']);
 
-const chapterBase = {
+const chapterFields = {
 	title: z.string().trim().min(1).max(200),
 	content: z.string().max(500_000).optional(),
 	content_type: contentType.optional(),
-	status: z.enum(['draft', 'published']).default('draft'),
 };
 
-export const createChapterSchema = z.object(chapterBase).superRefine((
+export const createChapterSchema = z.object({
+	...chapterFields,
+	status: z.enum(['draft', 'published']).default('draft'),
+}).superRefine((
 	data: { content?: string; content_type?: 'text' | 'comic' },
 	ctx: { addIssue: (issue: { code: string; message: string; path: string[] }) => void },
 ) => {
@@ -26,9 +28,14 @@ export const createChapterSchema = z.object(chapterBase).superRefine((
 	}
 });
 
+// Content update schema – status is optional with NO default so auto-saves
+// that omit it will never accidentally overwrite the existing status.
 export const updateChapterSchema = z.object({
-	...chapterBase,
-}).partial().superRefine((
+	title: chapterFields.title.optional(),
+	content: chapterFields.content,
+	content_type: chapterFields.content_type,
+	status: z.enum(['draft', 'published']).optional(),
+}).superRefine((
 	data: { content?: string; content_type?: 'text' | 'comic' },
 	ctx: { addIssue: (issue: { code: string; message: string; path: string[] }) => void },
 ) => {
@@ -39,6 +46,11 @@ export const updateChapterSchema = z.object({
 			path: ['content'],
 		});
 	}
+});
+
+// Dedicated status-only update schema used by PATCH /chapters/:id/status.
+export const updateChapterStatusSchema = z.object({
+	status: z.enum(['draft', 'published']),
 });
 
 export const reorderChaptersSchema = z.object({
@@ -56,6 +68,10 @@ export type CreateChapterInput = {
 };
 
 export type UpdateChapterInput = Partial<CreateChapterInput>;
+
+export type UpdateChapterStatusInput = {
+	status: 'draft' | 'published';
+};
 
 export type ReorderChaptersInput = {
 	chapters: Array<{ id: string; chapter_order: number }>;
