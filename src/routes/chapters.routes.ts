@@ -12,6 +12,8 @@ router.patch('/stories/:storyId/chapters/reorder', auth, asyncHandler(chaptersCo
 router.get('/chapters/:id', optionalAuth, asyncHandler(chaptersController.getChapter));
 router.patch('/chapters/:id', auth, asyncHandler(chaptersController.updateChapter));
 router.delete('/chapters/:id', auth, asyncHandler(chaptersController.deleteChapter));
+router.get('/chapters/:id/autosave', auth, asyncHandler(chaptersController.getAutosave));
+router.patch('/chapters/:id/autosave', auth, asyncHandler(chaptersController.saveAutosave));
 
 export default router;
 // Chapter route stub.

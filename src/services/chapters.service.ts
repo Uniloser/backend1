@@ -211,3 +211,15 @@ export async function reorderChapters(storyId: string, userId: string, input: Re
 
 	await chaptersRepository.reorderChapters(storyId, input.chapters);
 }
+
+export async function getAutosave(chapterId: string, userId: string) {
+	const chapter = await requireChapter(chapterId);
+	await requireStoryAuthor(chapter.story_id, userId);
+	return chaptersRepository.getAutosave(chapterId);
+}
+
+export async function saveAutosave(chapterId: string, userId: string, content: string) {
+	const chapter = await requireChapter(chapterId);
+	await requireStoryAuthor(chapter.story_id, userId);
+	return chaptersRepository.saveAutosave(chapterId, content);
+}

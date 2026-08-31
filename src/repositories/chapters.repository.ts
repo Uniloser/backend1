@@ -111,6 +111,29 @@ export async function reorderChapters(storyId: string, chapters: Array<{ id: str
 		if (error) throw error;
 	}
 }
+export async function getAutosave(chapterId: string) {
+	const { data, error } = await getSupabaseAdmin()
+		.from('chapters')
+		.select('autosave_content, autosaved_at')
+		.eq('id', chapterId)
+		.maybeSingle();
+
+	if (error) throw error;
+	return data;
+}
+
+export async function saveAutosave(chapterId: string, content: string) {
+	const { data, error } = await getSupabaseAdmin()
+		.from('chapters')
+		.update({ autosave_content: content, autosaved_at: new Date().toISOString() })
+		.eq('id', chapterId)
+		.select('id, autosaved_at')
+		.single();
+
+	if (error) throw error;
+	return data;
+}
+
 // Chapters-table repository stub.
 // TODO: implement chapter CRUD, published/author-scoped reads, atomic next
 // chapter_order allocation, batch reorder, and safe resequencing after delete.
