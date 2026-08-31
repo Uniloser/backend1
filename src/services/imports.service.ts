@@ -243,7 +243,8 @@ export async function commitImport(
   let nextOrder = await chaptersRepository.findNextChapterOrder(record.story_id);
   const createdIds: string[] = [];
 
-  for (const ch of chapters) {
+  for (let i = 0; i < chapters.length; i++) {
+    const ch = chapters[i];
     const cleanTitle = sanitizeTitle(ch.title) || `Chapter ${nextOrder}`;
     const cleanHtml = sanitizeHtml(ch.html || '<p></p>');
 
@@ -253,7 +254,7 @@ export async function commitImport(
       content: cleanHtml,
       content_type: (story.content_type as 'text' | 'comic') ?? 'text',
       status: 'draft',
-      chapter_order: ch.order ?? nextOrder,
+      chapter_order: nextOrder,
       published_at: null,
     });
 
