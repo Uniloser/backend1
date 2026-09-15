@@ -7,6 +7,12 @@ import type { ManuscriptImportRecord } from '../services/importers/types';
 // In-memory fallback cache
 const memoryImports = new Map<string, ManuscriptImportRecord>();
 
+export async function deleteAccountImports(userId: string) {
+  const { error } = await getSupabaseAdmin().from('manuscript_imports').delete().eq('user_id', userId);
+  if (error && error.code !== 'PGRST205' && error.code !== '42P01') throw error;
+  for (const [id, record] of memoryImports) if (record.user_id === userId) memoryImports.delete(id);
+}
+
 function getDbClient() {
   try {
     return getSupabaseAdmin();
@@ -91,4 +97,3 @@ export async function updateImport(
     console.warn('[ImportsRepository] Supabase update notice:', err);
   }
 }
-

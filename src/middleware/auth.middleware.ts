@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase';
 import { ApiError } from '../utils/ApiError';
+import { enforceCommunityTerms } from './communityTerms.middleware';
 
 interface Request {
 	get(name: string): string | undefined;
@@ -49,6 +50,7 @@ export const auth: RequestHandler = async (
 		}
 
 		request.user = await verifyUser(token);
+		enforceCommunityTerms(request);
 		next();
 	} catch (error) {
 		next(error);

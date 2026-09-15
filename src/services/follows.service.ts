@@ -2,6 +2,7 @@ import * as followsRepository from '../repositories/follows.repository';
 import * as usersRepository from '../repositories/users.repository';
 import * as notificationsService from './notifications.service';
 import { ApiError } from '../utils/ApiError';
+import { isBlocked } from '../repositories/blocks.repository';
 
 function assertNotSelf(followerId: string, followedId: string) {
 	if (followerId === followedId) {
@@ -11,6 +12,7 @@ function assertNotSelf(followerId: string, followedId: string) {
 
 export async function follow(followerId: string, followedId: string) {
 	assertNotSelf(followerId, followedId);
+	if (await isBlocked(followerId, followedId) || await isBlocked(followedId, followerId)) throw new ApiError(403, 'Following is unavailable between blocked accounts.');
 	const result = await followsRepository.follow(followerId, followedId);
 
 	void usersRepository
