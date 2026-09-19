@@ -24,6 +24,7 @@ import storyAdsRouter from './routes/storyAds.routes';
 import promotionsRouter from './routes/promotions.routes';
 import analyticsRouter from './routes/analytics.routes';
 import importsRouter from './routes/imports.routes';
+import mediaRouter from './routes/media.routes';
 import { errorHandler } from './middleware/errorHandler.middleware';
 
 const app = express();
@@ -46,6 +47,7 @@ app.use(promotionsRouter);
 app.use(analyticsRouter);
 app.use(uploadsRouter);
 app.use(importsRouter);
+app.use(mediaRouter);
 app.use(reportsRouter);
 app.use(bookmarksRouter);
 app.use(notificationsRouter);
