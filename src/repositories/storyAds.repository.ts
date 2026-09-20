@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '../config/supabase';
 export async function findActiveAd() {
 	const { data, error } = await getSupabaseAdmin()
 		.from('story_ads')
-		.select('id, story_id, title, description, image_url, background_image_url, button_text, priority, story:stories!story_ads_story_id_fkey(id, title, status)')
+		.select('*, story:stories!story_ads_story_id_fkey(id, title, status, author_id, cover_url, description, genre, tags)')
 		.eq('is_active', true)
 		.lte('starts_at', new Date().toISOString())
 		.or(`ends_at.is.null,ends_at.gte.${new Date().toISOString()}`)

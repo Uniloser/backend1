@@ -1,8 +1,12 @@
 import * as storyAdsRepository from '../repositories/storyAds.repository';
 import { ApiError } from '../utils/ApiError';
+import { promotionCreativeSchema } from '../validators/promotionCreative';
 
-export function getActiveAd() {
-	return storyAdsRepository.findActiveAd();
+export async function getActiveAd() {
+	const ad = await storyAdsRepository.findActiveAd();
+	if (!ad) return null;
+	const parsed = promotionCreativeSchema.safeParse(ad.presentation ?? {});
+	return { ...ad, presentation: parsed.success ? parsed.data : {} };
 }
 
 export async function recordEvent(adId: string, eventType: 'impression' | 'click', userId?: string, sessionId?: string) {
