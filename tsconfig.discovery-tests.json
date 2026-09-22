@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "outDir": ".discovery-test-dist", "types": ["node"] },
+  "include": ["src/**/*.ts", "scripts/test-discovery.ts", "scripts/test-discovery-service.ts"]
+}
