@@ -4,6 +4,7 @@ const { z } = require('zod') as {
 
 export const createCommentSchema = z.object({
 	text: z.string().trim().min(1).max(2_000),
+	quote: z.string().trim().min(1).max(10_000).nullable().optional(),
 });
 
 export const commentsPaginationSchema = z.object({
@@ -11,7 +12,7 @@ export const commentsPaginationSchema = z.object({
 	offset: z.coerce.number().int().min(0).default(0),
 });
 
-export type CreateCommentInput = { text: string };
+export type CreateCommentInput = { text: string; quote?: string | null };
 // Comment Zod schema stub.
 // TODO: validate comment text length and pagination parameters; exclude user_id
 // because identity must come from req.user.id.

@@ -4,6 +4,7 @@ import * as notificationsService from './notifications.service';
 import { ApiError } from '../utils/ApiError';
 import type { CreateCommentInput } from '../validators/comments.validator';
 import { isBlocked } from '../repositories/blocks.repository';
+import { requireReadableStory } from '../discovery/access';
 
 export function listComments(chapterId: string, limit: number, offset: number) {
   return commentsRepository.listByChapter(chapterId, limit, offset);
@@ -13,8 +14,10 @@ export async function createComment(chapterId: string, userId: string, input: Cr
   const chapter = await chaptersRepository.findChapter(chapterId);
   const story = chapter ? await chaptersRepository.findStoryOwner(chapter.story_id) : null;
   if (!story || !chapter) throw new ApiError(404, 'Chapter not found');
+  await requireReadableStory(chapter.story_id, userId);
+  if (chapter.status !== 'published' && story.author_id !== userId) throw new ApiError(404, 'Chapter not found');
   if (await isBlocked(story.author_id, userId) || await isBlocked(userId, story.author_id)) throw new ApiError(403, 'Comments are unavailable between blocked accounts.');
-  const comment = await commentsRepository.create({ chapter_id: chapterId, user_id: userId, text: input.text });
+  const comment = await commentsRepository.create({ chapter_id: chapterId, user_id: userId, text: input.text, quoted_text: input.quote ?? null });
 
   if (story?.author_id && chapter) {
     void notificationsService

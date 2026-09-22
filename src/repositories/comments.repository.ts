@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '../config/supabase';
 export async function listByChapter(chapterId: string, limit: number, offset: number) {
   const { data, error } = await getSupabaseAdmin()
     .from('comments')
-    .select('id, chapter_id, text, created_at, user:users!comments_user_id_fkey(id, username, display_name, avatar_url, is_alpha)')
+    .select('id, chapter_id, text, quote:quoted_text, created_at, user:users!comments_user_id_fkey(id, username, display_name, avatar_url, is_alpha)')
     .eq('chapter_id', chapterId)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
@@ -12,11 +12,11 @@ export async function listByChapter(chapterId: string, limit: number, offset: nu
   return data ?? [];
 }
 
-export async function create(input: { chapter_id: string; user_id: string; text: string }) {
+export async function create(input: { chapter_id: string; user_id: string; text: string; quoted_text?: string | null }) {
   const { data, error } = await getSupabaseAdmin()
     .from('comments')
     .insert(input)
-    .select()
+    .select('id, chapter_id, text, quote:quoted_text, created_at, user:users!comments_user_id_fkey(id, username, display_name, avatar_url, is_alpha)')
     .single();
 
   if (error) throw error;
