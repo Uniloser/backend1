@@ -2,7 +2,7 @@ import { getSupabaseAdmin } from '../config/supabase';
 import { env } from '../config/env';
 import { ApiError } from '../utils/ApiError';
 const db = () => getSupabaseAdmin();
-const profile = 'id,username,display_name,avatar_url';
+const profile = 'id,username,display_name,avatar_url,is_alpha';
 const selection = `*,user:users!community_posts_user_id_fkey(${profile}),story:stories!community_posts_story_id_fkey(id,title,cover_url,author_id,status,author:users!stories_author_id_fkey(${profile})),chapter:chapters!community_posts_chapter_id_fkey(id,title,chapter_order,status)`;
 async function rows(query: any): Promise<any[]> { const {data,error}=await query; if(error) throw error; return data ?? []; }
 async function one(query: any): Promise<any> { const {data,error}=await query; if(error) throw error; return data; }

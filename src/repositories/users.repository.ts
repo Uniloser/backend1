@@ -1,6 +1,6 @@
 import { getSupabaseAdmin } from '../config/supabase';
 
-const profileFields = 'id, username, display_name, bio, avatar_url, created_at, updated_at';
+const profileFields = 'id, username, display_name, bio, avatar_url, is_alpha, created_at, updated_at';
 
 export async function findByUsername(username: string) {
 	const { data, error } = await getSupabaseAdmin()
@@ -46,6 +46,18 @@ export async function listPublishedStories(authorId: string) {
 
 	if (error) throw error;
 	return data ?? [];
+}
+
+export async function markAsAlpha(userId: string) {
+	const { data, error } = await getSupabaseAdmin()
+		.from('users')
+		.update({ is_alpha: true })
+		.eq('id', userId)
+		.select(profileFields)
+		.single();
+
+	if (error) throw error;
+	return data;
 }
 
 export async function countFollowers(userId: string) {

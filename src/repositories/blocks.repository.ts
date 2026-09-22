@@ -28,7 +28,7 @@ export async function listBlocked(blockerId: string) {
 	const { data, error } = await getSupabaseAdmin()
 		.from('user_blocks')
 		.select(
-			'blocked_id, created_at, blocked:users!user_blocks_blocked_id_fkey(id, username, display_name, avatar_url)',
+			'blocked_id, created_at, blocked:users!user_blocks_blocked_id_fkey(id, username, display_name, avatar_url, is_alpha)',
 		)
 		.eq('blocker_id', blockerId)
 		.order('created_at', { ascending: false });

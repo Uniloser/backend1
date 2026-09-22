@@ -1,6 +1,6 @@
 import { getSupabaseAdmin } from '../config/supabase';
 
-const storySelect = '*, author:users!stories_author_id_fkey(id, username, display_name, avatar_url)';
+const storySelect = '*, author:users!stories_author_id_fkey(id, username, display_name, avatar_url, is_alpha)';
 
 export async function findStory(storyId: string) {
 	const { data, error } = await getSupabaseAdmin()

@@ -2,7 +2,7 @@ export type StoryCard = {
   id: string; author_id: string; title: string; description: string | null; cover_url: string | null;
   genre: string; tags: string[]; status: 'published' | 'draft'; created_at: string; updated_at: string;
   view_count: number; content_type?: string;
-  author: { id: string; username: string; display_name: string | null; avatar_url: string | null };
+  author: { id: string; username: string; display_name: string | null; avatar_url: string | null; is_alpha?: boolean };
 };
 export type Metrics = {
   unique_readers: number; readers_7d: number; readers_previous_7d: number;

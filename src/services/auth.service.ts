@@ -35,7 +35,7 @@ export async function signUp(email: string, password: string, username: string) 
 
   const { error: profileError } = await supabaseAdmin
     .from('users')
-    .insert({ id: data.user.id, username });
+    .insert({ id: data.user.id, username, is_alpha: true });
 
   if (profileError) {
     if (profileError.code === '23505') {

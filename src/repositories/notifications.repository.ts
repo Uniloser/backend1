@@ -1,7 +1,7 @@
 import { getSupabaseAdmin } from '../config/supabase';
 
 const notificationSelect =
-	'id, recipient_id, actor_id, notification_type, story_id, chapter_id, comment_id, title, body, data, read_at, created_at, actor:users!notifications_actor_id_fkey(id, username, display_name, avatar_url)';
+	'id, recipient_id, actor_id, notification_type, story_id, chapter_id, comment_id, title, body, data, read_at, created_at, actor:users!notifications_actor_id_fkey(id, username, display_name, avatar_url, is_alpha)';
 
 export type CreateNotificationInput = {
 	recipient_id: string;

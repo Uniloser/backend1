@@ -1,5 +1,6 @@
 -- Apply after schema.txt, genres.sql and comic_schema.sql. Additive; no analytics are deleted.
 begin;
+alter table public.users add column if not exists is_alpha boolean not null default false;
 alter table public.stories add column if not exists published_at timestamptz;
 alter table public.stories add column if not exists visibility text not null default 'public' check (visibility in ('public','private','unlisted'));
 alter table public.stories add column if not exists moderation_status text not null default 'approved' check (moderation_status in ('approved','pending','hidden','banned'));
@@ -78,7 +79,7 @@ select s.id, s.author_id, s.title, s.description, s.cover_url, s.genre, s.genre_
  coalesce(s.tags,'{}'::text[]) tags, s.status, s.created_at, s.updated_at, s.view_count, s.content_type,
  s.visibility, s.moderation_status, s.is_mature, s.is_complete, coalesce(s.published_at,s.created_at) published_at,
  s.last_chapter_published_at, s.chapters_published, true author_active,
- jsonb_build_object('id',u.id,'username',u.username,'display_name',u.display_name,'avatar_url',u.avatar_url) author,
+ jsonb_build_object('id',u.id,'username',u.username,'display_name',u.display_name,'avatar_url',u.avatar_url,'is_alpha',u.is_alpha) author,
  coalesce(d.metrics,'{}'::jsonb) metrics,
  d.trending_score, d.rising_score, d.hidden_gem_score, d.quality_score
 from public.stories s join public.users u on u.id=s.author_id join auth.users a on a.id=u.id

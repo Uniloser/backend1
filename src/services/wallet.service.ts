@@ -1,3 +1,4 @@
+import * as usersRepository from '../repositories/users.repository';
 import * as walletRepository from '../repositories/wallet.repository';
 
 export function getWallet(userId: string) {
@@ -20,7 +21,8 @@ export function awardGems(input: walletRepository.GemTransactionInput) {
 	return walletRepository.applyGemTransaction(input);
 }
 
-export function claimAlphaPerks(userId: string) {
+export async function claimAlphaPerks(userId: string) {
+	await usersRepository.markAsAlpha(userId);
 	return awardGems({
 		userId,
 		amount: 100,

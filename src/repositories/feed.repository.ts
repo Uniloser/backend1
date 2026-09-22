@@ -43,7 +43,7 @@ export async function listFollowedChapters(userId: string, limit: number) {
 export async function listRecentReleases(limit: number) {
 	const { data, error } = await getSupabaseAdmin()
 		.from('stories')
-		.select('*, author:users!stories_author_id_fkey(id, username, display_name, avatar_url)')
+		.select('*, author:users!stories_author_id_fkey(id, username, display_name, avatar_url, is_alpha)')
 		.eq('status', 'published')
 		.order('created_at', { ascending: false })
 		.limit(limit);
@@ -68,7 +68,7 @@ export async function listFollowedStories(userId: string, limit: number) {
 
 	const { data, error } = await db
 		.from('stories')
-		.select('*, author:users!stories_author_id_fkey(id, username, display_name, avatar_url)')
+		.select('*, author:users!stories_author_id_fkey(id, username, display_name, avatar_url, is_alpha)')
 		.in('author_id', authorIds)
 		.eq('status', 'published')
 		.order('updated_at', { ascending: false })
@@ -81,7 +81,7 @@ export async function listFollowedStories(userId: string, limit: number) {
 export async function listByGenre(genre: string | undefined, limit: number, offset: number) {
 	let query = getSupabaseAdmin()
 		.from('stories')
-		.select('*, author:users!stories_author_id_fkey(id, username, display_name, avatar_url)')
+		.select('*, author:users!stories_author_id_fkey(id, username, display_name, avatar_url, is_alpha)')
 		.eq('status', 'published')
 		.order('created_at', { ascending: false })
 		.range(offset, offset + limit - 1);

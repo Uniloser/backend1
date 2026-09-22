@@ -24,7 +24,7 @@ export async function unfollow(followerId: string, followedId: string) {
 export async function listFollowers(userId: string, limit: number, offset: number) {
 	const { data, error } = await getSupabaseAdmin()
 		.from('follows')
-		.select('created_at, follower:users!follows_follower_id_fkey(id, username, display_name, avatar_url)')
+		.select('created_at, follower:users!follows_follower_id_fkey(id, username, display_name, avatar_url, is_alpha)')
 		.eq('followed_id', userId)
 		.order('created_at', { ascending: false })
 		.range(offset, offset + limit - 1);
@@ -36,7 +36,7 @@ export async function listFollowers(userId: string, limit: number, offset: numbe
 export async function listFollowing(userId: string, limit: number, offset: number) {
 	const { data, error } = await getSupabaseAdmin()
 		.from('follows')
-		.select('created_at, followed:users!follows_followed_id_fkey(id, username, display_name, avatar_url)')
+		.select('created_at, followed:users!follows_followed_id_fkey(id, username, display_name, avatar_url, is_alpha)')
 		.eq('follower_id', userId)
 		.order('created_at', { ascending: false })
 		.range(offset, offset + limit - 1);
