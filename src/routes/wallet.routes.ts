@@ -10,5 +10,6 @@ router.get('/wallet', auth, asyncHandler(walletController.getWallet));
 router.get('/wallet/transactions', auth, asyncHandler(walletController.listTransactions));
 router.get('/wallet/achievements', auth, asyncHandler(walletController.listAchievements));
 router.get('/wallet/challenges', auth, asyncHandler(walletController.listChallenges));
+router.post('/wallet/claim-alpha', auth, asyncHandler(walletController.claimAlpha));
 
 export default router;

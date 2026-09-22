@@ -19,3 +19,8 @@ export async function listAchievements(request: any, response: any) {
 export async function listChallenges(request: any, response: any) {
 	response.json({ data: await walletService.listActiveChallenges(request.user.id) });
 }
+
+export async function claimAlpha(request: any, response: any) {
+	const wallet = await walletService.claimAlphaPerks(request.user.id);
+	response.json({ data: wallet });
+}

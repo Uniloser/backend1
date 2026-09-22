@@ -19,3 +19,13 @@ export function listActiveChallenges(userId: string) {
 export function awardGems(input: walletRepository.GemTransactionInput) {
 	return walletRepository.applyGemTransaction(input);
 }
+
+export function claimAlphaPerks(userId: string) {
+	return awardGems({
+		userId,
+		amount: 100,
+		reason: 'alpha_welcome_grant',
+		idempotencyKey: `alpha_grant:${userId}`,
+		metadata: { campaign: 'alpha_2026', source: 'founding_member' },
+	});
+}
