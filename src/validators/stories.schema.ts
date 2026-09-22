@@ -19,6 +19,9 @@ export const createStorySchema = z.object(storyFields);
 export const updateStorySchema = z.object({
 	...storyFields,
 	status: z.enum(['draft', 'published']).optional(),
+	is_complete: z.boolean().optional(),
+	is_mature: z.boolean().optional(),
+	visibility: z.enum(['public', 'private', 'unlisted']).optional(),
 }).partial();
 
 export type CreateStoryInput = {
@@ -32,6 +35,9 @@ export type CreateStoryInput = {
 
 export type UpdateStoryInput = Partial<CreateStoryInput> & {
 	status?: 'draft' | 'published';
+	is_complete?: boolean;
+	is_mature?: boolean;
+	visibility?: 'public' | 'private' | 'unlisted';
 };
 
 export const discoveryQuerySchema = z.object({

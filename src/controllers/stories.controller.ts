@@ -13,7 +13,7 @@ export async function getStory(request: any, response: any) {
 }
 
 export async function getRecommendations(request: any, response: any) {
-	const stories = await storiesService.getRecommendations(request.params.id);
+	const stories = await storiesService.getRecommendations(request.params.id,8,request.user?.id);
 	response.json({ data: stories });
 }
 

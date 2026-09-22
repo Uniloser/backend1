@@ -1,4 +1,5 @@
 import { ApiError } from '../utils/ApiError';
+import { requireReadableStory } from '../discovery/access';
 import * as chaptersRepository from '../repositories/chapters.repository';
 import * as panelsRepository from '../repositories/panels.repository';
 import type {
@@ -37,6 +38,7 @@ async function requireReadableComicChapter(chapterId: string, userId?: string) {
 	if (!chapter) {
 		throw new ApiError(404, 'Chapter not found');
 	}
+	await requireReadableStory(chapter.story_id,userId);
 
 	if (chapter.content_type !== 'comic') {
 		throw new ApiError(400, 'This chapter is not a comic chapter');

@@ -2,8 +2,11 @@ import * as progressRepository from '../repositories/progress.repository';
 import * as walletService from './wallet.service';
 import { ApiError } from '../utils/ApiError';
 import type { ProgressInput } from '../validators/progress.validator';
+import { recordChapter } from '../repositories/discovery.repository';
+import { requireReadableStory } from '../discovery/access';
 
 export async function updateProgress(userId: string, storyId: string, input: ProgressInput) {
+	await requireReadableStory(storyId,userId);
 	if (input.last_chapter_id) {
 		const chapter = await progressRepository.findChapterInStory(storyId, input.last_chapter_id);
 
@@ -26,6 +29,7 @@ export async function updateProgress(userId: string, storyId: string, input: Pro
 			referenceId: input.completed_chapter_id,
 			idempotencyKey: `chapter_completed:${userId}:${input.completed_chapter_id}`,
 		});
+		await recordChapter(userId, storyId, input.completed_chapter_id);
 	}
 
 	return progressRepository.upsertProgress(

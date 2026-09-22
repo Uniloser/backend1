@@ -3,12 +3,14 @@ import * as progressRepository from '../repositories/progress.repository';
 import * as storiesRepository from '../repositories/stories.repository';
 import { ApiError } from '../utils/ApiError';
 import type { RecordStoryViewInput } from '../validators/storyViews.validator';
+import { requireReadableStory } from '../discovery/access';
 
 export async function recordView(
 	storyId: string,
 	userId: string | undefined,
 	input: RecordStoryViewInput,
 ) {
+	await requireReadableStory(storyId,userId);
 	const story = await storiesRepository.findStory(storyId);
 
 	if (!story) {

@@ -8,7 +8,9 @@
     "dev": "tsx watch server.ts",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsx scripts/test-api.ts"
+    "test": "tsx scripts/test-api.ts",
+    "test:discovery": "tsc -p tsconfig.discovery-tests.json && node --test .discovery-test-dist/scripts/test-discovery.js .discovery-test-dist/scripts/test-discovery-service.js",
+    "discovery:refresh": "tsx scripts/refresh-discovery.ts"
   },
   "keywords": [],
   "author": "",

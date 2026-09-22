@@ -9,7 +9,7 @@ export async function getFeed(request: any, response: any) {
 
 export async function discover(request: any, response: any) {
 	const { genre, limit, offset } = discoveryQuerySchema.parse(request.query);
-	const stories = await feedService.discover(genre, limit, offset);
+	const stories = await feedService.discover(genre, limit, offset, request.user?.id);
 	response.json({ data: stories, pagination: { limit, offset } });
 }
 
@@ -21,13 +21,13 @@ export async function discoverFollowing(request: any, response: any) {
 
 export async function trending(request: any, response: any) {
 	const { limit } = discoveryQuerySchema.parse(request.query);
-	const stories = await feedService.trending(limit);
+	const stories = await feedService.trending(limit, request.user?.id);
 	response.json({ data: stories });
 }
 
 export async function search(request: any, response: any) {
 	const { q, limit, offset } = searchQuerySchema.parse(request.query);
-	const stories = await feedService.search(q, limit, offset);
+	const stories = await feedService.search(q, limit, offset, request.user?.id);
 	response.json({ data: stories, pagination: { limit, offset } });
 }
 // Feed/discovery controller stub.

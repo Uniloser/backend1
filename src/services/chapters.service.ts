@@ -1,4 +1,5 @@
 import { ApiError } from '../utils/ApiError';
+import { requireReadableStory } from '../discovery/access';
 import * as chaptersRepository from '../repositories/chapters.repository';
 import * as panelsRepository from '../repositories/panels.repository';
 import { enqueueNotifyFollowers } from '../jobs/notifyFollowers.job';
@@ -76,6 +77,7 @@ async function validateComicPublish(chapterId: string) {
 }
 
 export async function listChapters(storyId: string, userId?: string) {
+	await requireReadableStory(storyId,userId);
 	const story = await chaptersRepository.findStoryOwner(storyId);
 
 	if (!story) {
@@ -92,6 +94,7 @@ export async function listChapters(storyId: string, userId?: string) {
 
 export async function getChapter(chapterId: string, userId?: string) {
 	const chapter = await requireChapter(chapterId);
+	await requireReadableStory(chapter.story_id,userId);
 
 	if (chapter.status === 'published') {
 		return attachChapterPanels(chapter, userId);

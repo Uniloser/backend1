@@ -1,6 +1,7 @@
 import { getRedis } from '../config/redis';
 import * as feedRepository from '../repositories/feed.repository';
-import * as genresService from './genres.service';
+import * as discoveryRepository from '../repositories/discovery.repository';
+import { storyCard } from '../discovery/filters';
 
 async function cached<T>(key: string, loader: () => Promise<T>): Promise<T> {
 	const redis = getRedis();
@@ -31,27 +32,20 @@ export function getFeed(userId: string, limit = 20) {
 	});
 }
 
-export function discover(genre: string | undefined, limit: number, offset: number) {
-	return cached(`discover:${genre ?? 'all'}:${limit}:${offset}`, async () => {
-		const genreId = await genresService.findGenreId(genre);
-		return feedRepository.listByGenre(genreId, limit, offset);
-	});
+export async function discover(genre: string | undefined, limit: number, offset: number, userId?: string) {
+	return (await discoveryRepository.browse({genre,limit,offset,userId})).map(storyCard);
 }
 
-export function trending(limit: number) {
-	return cached(`trending:${limit}`, () => feedRepository.listTrending(limit));
+export async function trending(limit: number,userId?:string) {
+	return (await discoveryRepository.browse({limit,offset:0,userId,trending:true})).map(storyCard);
 }
 
-export function discoverFollowing(userId: string, limit = 20) {
-	return cached(`discover:following:${userId}:${limit}`, () => (
-		feedRepository.listFollowedStories(userId, limit)
-	));
+export async function discoverFollowing(userId: string, limit = 20) {
+	return (await discoveryRepository.browse({limit,offset:0,userId,following:true})).map(storyCard);
 }
 
-export function search(query: string, limit: number, offset: number) {
-	return cached(`search:${query}:${limit}:${offset}`, () => (
-		feedRepository.searchStories(query, limit, offset)
-	));
+export async function search(query: string, limit: number, offset: number,userId?:string) {
+	return (await discoveryRepository.browse({query,limit,offset,userId})).map(storyCard);
 }
 // Feed/discovery business-logic stub.
 // TODO: combine followed-author chapters, selected-genre trends, and recent

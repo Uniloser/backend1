@@ -4,6 +4,8 @@ import { enqueueNotifyFollowers } from '../jobs/notifyFollowers.job';
 import { ApiError } from '../utils/ApiError';
 import type { CreateStoryInput, UpdateStoryInput } from '../validators/stories.schema';
 import * as genresService from './genres.service';
+import { requireReadableStory } from '../discovery/access';
+import { getSimilarStories } from './discovery.service';
 
 async function requireStory(storyId: string) {
 	const story = await storiesRepository.findStory(storyId);
@@ -39,6 +41,7 @@ export async function createStory(authorId: string, input: CreateStoryInput) {
 }
 
 export async function getStory(storyId: string, userId?: string) {
+	await requireReadableStory(storyId,userId);
 	const story = await requireStory(storyId);
 
 	if (story.status === 'draft' && story.author_id !== userId) {
@@ -93,14 +96,6 @@ export async function listPublishedStoriesByAuthor(authorId: string) {
 	return storiesRepository.listPublishedStoriesByAuthor(authorId);
 }
 
-export async function getRecommendations(storyId: string, limit = 8) {
-	const story = await requireStory(storyId);
-	if (story.status !== 'published') return [];
-	let recs = await storiesRepository.listRecommendations(storyId, story.genre_id, limit);
-	if (recs.length < limit) {
-		const excludeIds = [storyId, ...recs.map((r: any) => r.id)];
-		const more = await storiesRepository.listPopularPublishedExcluding(excludeIds, limit - recs.length);
-		recs = [...recs, ...more];
-	}
-	return recs;
+export async function getRecommendations(storyId: string, limit = 8,userId?:string) {
+	return getSimilarStories(storyId,userId,limit);
 }

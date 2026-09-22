@@ -5,8 +5,15 @@ import * as progressController from '../controllers/progress.controller';
 import * as feedController from '../controllers/feed.controller';
 import { optionalAuth } from '../middleware/auth.middleware';
 import { asyncHandler } from '../utils/asyncHandler';
+import * as discoveryController from '../controllers/discovery.controller';
+const rateLimit = require('express-rate-limit');
 
 const router = Router();
+const discoveryLimit = rateLimit({ windowMs: 60000, limit: 60, standardHeaders: true, legacyHeaders: false });
+const discoveryEventsLimit = rateLimit({ windowMs: 60000, limit: 30, standardHeaders: true, legacyHeaders: false });
+router.get('/discovery', optionalAuth, discoveryLimit, asyncHandler(discoveryController.discover));
+router.put('/discovery/preferences', auth, discoveryLimit, asyncHandler(discoveryController.preferences));
+router.post('/discovery/events', optionalAuth, discoveryEventsLimit, asyncHandler(discoveryController.events));
 
 router.put('/stories/:id/progress', auth, asyncHandler(progressController.updateProgress));
 router.get('/library', auth, asyncHandler(progressController.getLibrary));
