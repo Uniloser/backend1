@@ -96,28 +96,42 @@ export async function deletePanel(panelId: string) {
 
 export async function resequencePanels(chapterId: string) {
 	const panels = await listPanels(chapterId);
+	await writePanelOrder(chapterId, panels.map((panel, index) => ({
+		id: panel.id,
+		panel_order: index + 1,
+	})), panels);
+}
 
-	for (let index = 0; index < panels.length; index += 1) {
-		const panel = panels[index];
-		const nextOrder = index + 1;
+export async function reorderPanels(chapterId: string, panels: Array<{ id: string; panel_order: number }>) {
+	const existingPanels = await listPanels(chapterId);
+	await writePanelOrder(chapterId, panels, existingPanels);
+}
 
-		if (panel.panel_order === nextOrder) {
-			continue;
-		}
+async function writePanelOrder(
+	chapterId: string,
+	orderedPanels: Array<{ id: string; panel_order: number }>,
+	existingPanels: Array<{ id: string; panel_order: number }>,
+) {
+	if (orderedPanels.length === 0) return;
 
-		const { error } = await getSupabaseAdmin()
+	// Vacate every current position first. Otherwise moving a panel into a slot
+	// still held by another panel violates UNIQUE (chapter_id, panel_order).
+	const temporaryBase = Math.max(0, ...existingPanels.map((panel) => panel.panel_order)) + orderedPanels.length + 1;
+	const supabase = getSupabaseAdmin();
+
+	for (let index = 0; index < orderedPanels.length; index += 1) {
+		const panel = orderedPanels[index];
+		const { error } = await supabase
 			.from('comic_panels')
-			.update({ panel_order: nextOrder })
+			.update({ panel_order: temporaryBase + index })
 			.eq('id', panel.id)
 			.eq('chapter_id', chapterId);
 
 		if (error) throw error;
 	}
-}
 
-export async function reorderPanels(chapterId: string, panels: Array<{ id: string; panel_order: number }>) {
-	for (const panel of panels) {
-		const { error } = await getSupabaseAdmin()
+	for (const panel of orderedPanels) {
+		const { error } = await supabase
 			.from('comic_panels')
 			.update({ panel_order: panel.panel_order })
 			.eq('id', panel.id)
