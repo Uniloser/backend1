@@ -12,6 +12,11 @@ export async function getCurrentProfile(request: any, response: any) {
 	response.json({ data: profile });
 }
 
+export async function getMonetizationStatus(request: any, response: any) {
+	const status = await usersService.getMonetizationStatus(request.user.id);
+	response.json({ data: status });
+}
+
 export async function getCurrentStories(request: any, response: any) {
 	const stories = await usersService.getCurrentStories(request.user.id);
 	response.json({ data: stories });

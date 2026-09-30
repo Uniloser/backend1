@@ -22,6 +22,8 @@ export const updateStorySchema = z.object({
 	is_complete: z.boolean().optional(),
 	is_mature: z.boolean().optional(),
 	visibility: z.enum(['public', 'private', 'unlisted']).optional(),
+	access_type: z.enum(['FREE', 'PREMIUM']).optional(),
+	free_chapter_count: z.number().int().min(3).max(10_000).optional(),
 }).partial();
 
 export type CreateStoryInput = {
@@ -38,6 +40,8 @@ export type UpdateStoryInput = Partial<CreateStoryInput> & {
 	is_complete?: boolean;
 	is_mature?: boolean;
 	visibility?: 'public' | 'private' | 'unlisted';
+	access_type?: 'FREE' | 'PREMIUM';
+	free_chapter_count?: number;
 };
 
 export const discoveryQuerySchema = z.object({

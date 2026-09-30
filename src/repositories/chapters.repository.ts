@@ -3,12 +3,12 @@ import { getSupabaseAdmin } from '../config/supabase';
 export async function findStoryOwner(storyId: string) {
 	const { data, error } = await getSupabaseAdmin()
 		.from('stories')
-		.select('author_id, content_type')
+		.select('author_id, content_type, access_type, free_chapter_count, monetization_enabled, status')
 		.eq('id', storyId)
 		.maybeSingle();
 
 	if (error) throw error;
-	return data as { author_id: string; content_type?: string } | null;
+	return data as { author_id: string; content_type?: string; access_type?: string; free_chapter_count?: number; monetization_enabled?: boolean; status?: string } | null;
 }
 
 export async function findChapter(chapterId: string) {
@@ -38,6 +38,8 @@ export async function createChapter(input: {
 	title: string;
 	content: string;
 	content_type: 'text' | 'comic';
+	has_text: boolean;
+	has_comic: boolean;
 	status: 'draft' | 'published';
 	chapter_order: number;
 	published_at: string | null;

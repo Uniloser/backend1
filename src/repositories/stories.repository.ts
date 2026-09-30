@@ -55,6 +55,16 @@ export async function countChapters(storyId: string) {
 	return count ?? 0;
 }
 
+export async function countPublishedChapters(storyId: string) {
+	const { count, error } = await getSupabaseAdmin()
+		.from('chapters')
+		.select('id', { count: 'exact', head: true })
+		.eq('story_id', storyId)
+		.eq('status', 'published');
+	if (error) throw error;
+	return count ?? 0;
+}
+
 export async function listPublishedStoriesByAuthor(authorId: string) {
 	const { data, error } = await getSupabaseAdmin()
 		.from('stories')

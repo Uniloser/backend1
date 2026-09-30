@@ -2,6 +2,7 @@ import { ApiError } from '../utils/ApiError';
 import { requireReadableStory } from '../discovery/access';
 import * as chaptersRepository from '../repositories/chapters.repository';
 import * as panelsRepository from '../repositories/panels.repository';
+import { assertPublishedChapterAccess } from './chapters.service';
 import type {
 	CreatePanelInput,
 	ReorderPanelsInput,
@@ -25,7 +26,7 @@ async function requireComicChapterAuthor(chapterId: string, userId: string) {
 		throw new ApiError(403, 'Only the story author can manage panels');
 	}
 
-	if (chapter.content_type !== 'comic') {
+	if (!(chapter.has_comic ?? chapter.content_type === 'comic')) {
 		throw new ApiError(400, 'Panels can only be added to comic chapters');
 	}
 
@@ -40,7 +41,7 @@ async function requireReadableComicChapter(chapterId: string, userId?: string) {
 	}
 	await requireReadableStory(chapter.story_id,userId);
 
-	if (chapter.content_type !== 'comic') {
+	if (!(chapter.has_comic ?? chapter.content_type === 'comic')) {
 		throw new ApiError(400, 'This chapter is not a comic chapter');
 	}
 
@@ -59,6 +60,7 @@ async function requireReadableComicChapter(chapterId: string, userId?: string) {
 
 export async function listPanels(chapterId: string, userId?: string) {
 	await requireReadableComicChapter(chapterId, userId);
+	await assertPublishedChapterAccess(chapterId, userId);
 	return panelsRepository.listPanels(chapterId);
 }
 

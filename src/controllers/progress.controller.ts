@@ -12,6 +12,12 @@ export async function getLibrary(request: any, response: any) {
 	const library = await progressService.getLibrary(request.user.id);
 	response.json({ data: library });
 }
+
+export async function getProgress(request: any, response: any) {
+	const storyId = storyIdSchema.parse(request.params.id);
+	const progress = await progressService.getProgress(request.user.id, storyId);
+	response.json({ data: progress });
+}
 // Reading progress and library controller stub.
 // TODO: upsert last_chapter_id from PUT /stories/:id/progress and list a user's
 // progress/bookmarked stories from GET /library, always scoped to req.user.id.

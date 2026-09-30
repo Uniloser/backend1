@@ -7,16 +7,31 @@
 -- 1. STORY TYPE: TEXT | COMIC
 -- ------------------------------------------------------------
 alter table public.stories
-  add column content_type text not null default 'text'
-  check (content_type in ('text', 'comic'));
+  add column if not exists content_type text not null default 'text';
+
+do $$ begin
+  alter table public.stories add constraint stories_content_type_check check (content_type in ('text', 'comic'));
+exception when duplicate_object then null;
+end $$;
 
 -- ------------------------------------------------------------
 -- 2. CHAPTER TYPE (a story could technically mix, but usually
 --    matches the parent story's content_type)
 -- ------------------------------------------------------------
 alter table public.chapters
-  add column content_type text not null default 'text'
-  check (content_type in ('text', 'comic'));
+  add column if not exists content_type text not null default 'text';
+
+do $$ begin
+  alter table public.chapters add constraint chapters_content_type_check check (content_type in ('text', 'comic'));
+exception when duplicate_object then null;
+end $$;
+
+alter table public.chapters add column if not exists has_text boolean not null default true;
+alter table public.chapters add column if not exists has_comic boolean not null default false;
+update public.chapters
+set has_text = (content_type = 'text'), has_comic = (content_type = 'comic')
+where has_text is distinct from (content_type = 'text')
+   or has_comic is distinct from (content_type = 'comic');
 
 -- For comic chapters, `chapters.content` is simply unused/empty.
 -- Panels live in comic_panels instead, keyed off chapter_id.
@@ -24,7 +39,7 @@ alter table public.chapters
 -- ------------------------------------------------------------
 -- 3. COMIC PANELS (one row per image/panel in a chapter)
 -- ------------------------------------------------------------
-create table public.comic_panels (
+create table if not exists public.comic_panels (
   id uuid primary key default uuid_generate_v4(),
   chapter_id uuid not null references public.chapters(id) on delete cascade,
   panel_order integer not null,
@@ -36,8 +51,9 @@ create table public.comic_panels (
   unique (chapter_id, panel_order)
 );
 
-create index idx_comic_panels_chapter on public.comic_panels(chapter_id);
+create index if not exists idx_comic_panels_chapter on public.comic_panels(chapter_id);
 
+drop trigger if exists trg_comic_panels_updated_at on public.comic_panels;
 create trigger trg_comic_panels_updated_at before update on public.comic_panels
   for each row execute function public.set_updated_at();
 
@@ -45,7 +61,7 @@ create trigger trg_comic_panels_updated_at before update on public.comic_panels
 -- 4. SPEECH BUBBLES (stored separately, overlaid on the panel
 --    at render time — not baked into the image)
 -- ------------------------------------------------------------
-create table public.speech_bubbles (
+create table if not exists public.speech_bubbles (
   id uuid primary key default uuid_generate_v4(),
   panel_id uuid not null references public.comic_panels(id) on delete cascade,
   bubble_type text not null default 'speech'
@@ -62,8 +78,9 @@ create table public.speech_bubbles (
   updated_at timestamptz not null default now()
 );
 
-create index idx_speech_bubbles_panel on public.speech_bubbles(panel_id);
+create index if not exists idx_speech_bubbles_panel on public.speech_bubbles(panel_id);
 
+drop trigger if exists trg_speech_bubbles_updated_at on public.speech_bubbles;
 create trigger trg_speech_bubbles_updated_at before update on public.speech_bubbles
   for each row execute function public.set_updated_at();
 
@@ -75,6 +92,7 @@ alter table public.speech_bubbles enable row level security;
 
 -- COMIC PANELS: published-chapter panels viewable by everyone,
 -- draft-chapter panels only by the story's author
+drop policy if exists "Comic panels are viewable if their chapter is published or owned" on public.comic_panels;
 create policy "Comic panels are viewable if their chapter is published or owned"
   on public.comic_panels for select using (
     exists (
@@ -85,6 +103,7 @@ create policy "Comic panels are viewable if their chapter is published or owned"
     )
   );
 
+drop policy if exists "Authors can insert panels on their own chapters" on public.comic_panels;
 create policy "Authors can insert panels on their own chapters"
   on public.comic_panels for insert with check (
     exists (
@@ -94,6 +113,7 @@ create policy "Authors can insert panels on their own chapters"
     )
   );
 
+drop policy if exists "Authors can update panels on their own chapters" on public.comic_panels;
 create policy "Authors can update panels on their own chapters"
   on public.comic_panels for update using (
     exists (
@@ -103,6 +123,7 @@ create policy "Authors can update panels on their own chapters"
     )
   );
 
+drop policy if exists "Authors can delete panels on their own chapters" on public.comic_panels;
 create policy "Authors can delete panels on their own chapters"
   on public.comic_panels for delete using (
     exists (
@@ -113,6 +134,7 @@ create policy "Authors can delete panels on their own chapters"
   );
 
 -- SPEECH BUBBLES: same visibility/ownership rules, one level deeper
+drop policy if exists "Speech bubbles are viewable if their panel is published or owned" on public.speech_bubbles;
 create policy "Speech bubbles are viewable if their panel is published or owned"
   on public.speech_bubbles for select using (
     exists (
@@ -124,6 +146,7 @@ create policy "Speech bubbles are viewable if their panel is published or owned"
     )
   );
 
+drop policy if exists "Authors can insert bubbles on their own panels" on public.speech_bubbles;
 create policy "Authors can insert bubbles on their own panels"
   on public.speech_bubbles for insert with check (
     exists (
@@ -134,6 +157,7 @@ create policy "Authors can insert bubbles on their own panels"
     )
   );
 
+drop policy if exists "Authors can update bubbles on their own panels" on public.speech_bubbles;
 create policy "Authors can update bubbles on their own panels"
   on public.speech_bubbles for update using (
     exists (
@@ -144,6 +168,7 @@ create policy "Authors can update bubbles on their own panels"
     )
   );
 
+drop policy if exists "Authors can delete bubbles on their own panels" on public.speech_bubbles;
 create policy "Authors can delete bubbles on their own panels"
   on public.speech_bubbles for delete using (
     exists (

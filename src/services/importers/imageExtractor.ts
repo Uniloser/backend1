@@ -1,17 +1,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // ReadAgora Backend — Image Extractor
 // ─────────────────────────────────────────────────────────────────────────────
-import { getSupabaseAdmin, supabase } from '../../config/supabase';
+import { getSupabaseAdmin } from '../../config/supabase';
 import type { ImportContext } from './types';
 
 const ASSETS_BUCKET = 'story-assets';
 
 function getStorageClient() {
-  try {
-    return getSupabaseAdmin();
-  } catch {
-    return supabase;
-  }
+	return getSupabaseAdmin();
 }
 
 export interface UploadedImage {

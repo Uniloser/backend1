@@ -27,11 +27,17 @@ import analyticsRouter from './routes/analytics.routes';
 import importsRouter from './routes/imports.routes';
 import mediaRouter from './routes/media.routes';
 import { errorHandler } from './middleware/errorHandler.middleware';
+import { env } from './config/env';
 
 const app = express();
 
+app.set('trust proxy', env.trustProxyHops);
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+	origin(origin: string | undefined, callback: (error: Error | null, allowed?: boolean) => void) {
+		callback(null, !origin || env.corsOrigins.includes(origin));
+	},
+}));
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(authRouter);

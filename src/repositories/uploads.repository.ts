@@ -22,6 +22,11 @@ export async function uploadImage(
 	const { data } = getSupabaseAdmin().storage.from(bucket).getPublicUrl(objectPath);
 	return data.publicUrl;
 }
+
+export async function removeImage(target: keyof typeof bucketNames, objectPath: string) {
+	const { error } = await getSupabaseAdmin().storage.from(bucketNames[target]).remove([objectPath]);
+	if (error) throw error;
+}
 // Supabase Storage repository stub.
 // TODO: own bucket/object upload, replacement, deletion, and public URL access;
 // keep Storage SDK calls out of controllers.

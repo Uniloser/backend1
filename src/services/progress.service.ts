@@ -43,6 +43,11 @@ export async function updateProgress(userId: string, storyId: string, input: Pro
 export function getLibrary(userId: string) {
 	return progressRepository.listLibrary(userId);
 }
+
+export async function getProgress(userId: string, storyId: string) {
+	await requireReadableStory(storyId, userId);
+	return progressRepository.findProgress(userId, storyId);
+}
 // Reading progress service stub.
 // TODO: validate that the chapter belongs to the story, then upsert progress
 // for req.user.id and return resume points together with library entries.

@@ -2,6 +2,8 @@ import * as usersRepository from '../repositories/users.repository';
 import { ApiError } from '../utils/ApiError';
 import type { UpdateProfileInput } from '../validators/users.validator';
 import { listPublishedStoriesByAuthor, listStoriesByAuthor } from '../repositories/stories.repository';
+import { getSupabaseAdmin } from '../config/supabase';
+import { MINIMUM_FREE_CHAPTERS } from '../config/premium';
 
 export async function getPublicProfile(username: string) {
 	const profile = await usersRepository.findByUsername(username);
@@ -26,6 +28,13 @@ export async function getCurrentProfile(userId: string) {
 	}
 
 	return profile;
+}
+
+export async function getMonetizationStatus(userId: string) {
+	const { data, error } = await getSupabaseAdmin()
+		.from('creator_monetization_profiles').select('status, approved_at, suspended_at').eq('user_id', userId).maybeSingle();
+	if (error) throw error;
+	return { ...(data ?? { status: 'NOT_ELIGIBLE', approved_at: null, suspended_at: null }), minimum_free_chapters: MINIMUM_FREE_CHAPTERS };
 }
 
 export async function updateCurrentProfile(userId: string, input: UpdateProfileInput) {

@@ -16,6 +16,7 @@ router.put('/discovery/preferences', auth, discoveryLimit, asyncHandler(discover
 router.post('/discovery/events', optionalAuth, discoveryEventsLimit, asyncHandler(discoveryController.events));
 
 router.put('/stories/:id/progress', auth, asyncHandler(progressController.updateProgress));
+router.get('/stories/:id/progress', auth, asyncHandler(progressController.getProgress));
 router.get('/library', auth, asyncHandler(progressController.getLibrary));
 router.get('/feed', auth, asyncHandler(feedController.getFeed));
 router.get('/discover/following', auth, asyncHandler(feedController.discoverFollowing));

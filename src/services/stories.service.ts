@@ -6,6 +6,8 @@ import type { CreateStoryInput, UpdateStoryInput } from '../validators/stories.s
 import * as genresService from './genres.service';
 import { requireReadableStory } from '../discovery/access';
 import { getSimilarStories } from './discovery.service';
+import { getSupabaseAdmin } from '../config/supabase';
+import { MINIMUM_FREE_CHAPTERS } from '../config/premium';
 
 async function requireStory(storyId: string) {
 	const story = await storiesRepository.findStory(storyId);
@@ -58,6 +60,19 @@ export async function getStory(storyId: string, userId?: string) {
 export async function updateStory(storyId: string, userId: string, input: UpdateStoryInput) {
 	const story = await requireAuthor(storyId, userId);
 	const update: Record<string, unknown> = { ...input };
+	if (input.access_type === 'PREMIUM' || input.free_chapter_count !== undefined) {
+		const { data: creator, error: creatorError } = await getSupabaseAdmin()
+			.from('creator_monetization_profiles').select('status').eq('user_id', userId).maybeSingle();
+		if (creatorError) throw creatorError;
+		if (creator?.status !== 'APPROVED') throw new ApiError(403, 'Your creator account is not approved for premium stories.');
+		const freeCount = input.free_chapter_count ?? story.free_chapter_count ?? MINIMUM_FREE_CHAPTERS;
+		if (freeCount < MINIMUM_FREE_CHAPTERS) throw new ApiError(400, `Premium stories require at least ${MINIMUM_FREE_CHAPTERS} free chapters.`);
+		const publishedCount = await storiesRepository.countPublishedChapters(storyId);
+		if (freeCount > publishedCount) throw new ApiError(400, 'The free preview cannot exceed the number of published chapters.');
+		update.free_chapter_count = freeCount;
+		update.monetization_enabled = input.access_type === 'PREMIUM' || (input.access_type === undefined && story.access_type === 'PREMIUM');
+	}
+	if (input.access_type === 'FREE') update.monetization_enabled = false;
 	if (input.genre) {
 		const genre = await genresService.requireGenre(input.genre);
 		update.genre = genre.name;
@@ -85,6 +100,13 @@ export async function updateStory(storyId: string, userId: string, input: Update
 	}
 
 	return updated;
+}
+
+export async function getMonetizationStatus(userId: string) {
+	const { data, error } = await getSupabaseAdmin()
+		.from('creator_monetization_profiles').select('status, approved_at, suspended_at').eq('user_id', userId).maybeSingle();
+	if (error) throw error;
+	return data ?? { status: 'NOT_ELIGIBLE', approved_at: null, suspended_at: null };
 }
 
 export async function deleteStory(storyId: string, userId: string) {

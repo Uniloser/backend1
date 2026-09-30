@@ -22,6 +22,21 @@ router.patch('/moderation/reports/:id', auth, requireModerator, asyncHandler(asy
 	const { data: report, error } = await admin.from('reports').select('*').eq('id', id).single();
 	if (error || !report) throw new ApiError(404, 'Report not found');
 	if (report.status === 'resolved' || report.status === 'dismissed') throw new ApiError(409, 'This report was already reviewed.');
+	if (report.status === 'in_review' && report.assigned_to !== request.user.id) {
+		throw new ApiError(409, 'This report is being reviewed by another moderator.');
+	}
+	if (report.status === 'open') {
+		const { data: claim, error: claimError } = await admin.from('reports')
+			.update({ status: 'in_review', assigned_to: request.user.id })
+			.eq('id', id)
+			.eq('status', 'open')
+			.select('id')
+			.maybeSingle();
+		if (claimError) throw claimError;
+		if (!claim) throw new ApiError(409, 'This report has already been claimed by another moderator.');
+	} else if (report.status !== 'in_review') {
+		throw new ApiError(409, 'This report is not available for review.');
+	}
 	if (input.action === 'remove_content') {
 		const target = report.story_id ? ['stories', report.story_id] : report.chapter_id ? ['chapters', report.chapter_id] : report.comment_id ? ['comments', report.comment_id] : undefined;
 		if (!target) throw new ApiError(400, 'This report has no content to remove.');

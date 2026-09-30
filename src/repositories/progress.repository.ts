@@ -34,6 +34,17 @@ export async function upsertProgress(
 	return data;
 }
 
+export async function findProgress(userId: string, storyId: string) {
+	const { data, error } = await getSupabaseAdmin()
+		.from('reading_progress')
+		.select('story_id, last_chapter_id, last_panel_index, updated_at')
+		.eq('user_id', userId)
+		.eq('story_id', storyId)
+		.maybeSingle();
+	if (error) throw error;
+	return data;
+}
+
 export async function listLibrary(userId: string) {
 	const { data, error } = await getSupabaseAdmin()
 		.from('reading_progress')

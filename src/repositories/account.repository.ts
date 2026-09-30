@@ -7,7 +7,7 @@ export async function deleteAccount(userId: string) {
 	if (!/^[0-9a-f-]{36}$/i.test(userId)) throw new Error('Invalid account identifier');
 	const admin = getSupabaseAdmin();
 	await deleteAccountImports(userId);
-	for (const bucket of new Set([env.coverBucket, env.avatarBucket, env.panelBucket])) {
+	for (const bucket of new Set([env.coverBucket, env.avatarBucket, env.panelBucket, 'manuscripts', 'story-assets'])) {
 		const storage = admin.storage.from(bucket);
 		async function removeFolder(prefix: string): Promise<void> {
 			for (;;) {

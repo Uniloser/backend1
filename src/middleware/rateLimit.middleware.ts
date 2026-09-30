@@ -3,28 +3,10 @@ const rateLimit = require('express-rate-limit') as any;
 type RateLimitRequest = {
 	ip?: string;
 	user?: { id?: string };
-	headers?: Record<string, string | string[] | undefined>;
 	body?: { email?: string; [key: string]: unknown };
 };
 
 function getClientIp(request: RateLimitRequest): string {
-	const forwardedFor = request.headers?.['x-forwarded-for'];
-	if (Array.isArray(forwardedFor) && forwardedFor.length > 0) {
-		return forwardedFor[0].split(',')[0].trim() || 'unknown';
-	}
-
-	if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
-		return forwardedFor.split(',')[0].trim();
-	}
-
-	const realIp = request.headers?.['x-real-ip'];
-	if (Array.isArray(realIp) && realIp.length > 0) {
-		return realIp[0].trim() || 'unknown';
-	}
-	if (typeof realIp === 'string' && realIp.trim()) {
-		return realIp.trim();
-	}
-
 	return request.ip || 'unknown';
 }
 
@@ -53,7 +35,21 @@ export const authRateLimit = rateLimit({
 		},
 	},
 });
-// Rate limiting is keyed by authenticated user ID first, then email, and finally
-// the client IP address. This avoids one shared global bucket for every request.
+
+// The account key and IP key are applied together on signup/signin so callers
+// cannot bypass throttling by rotating email addresses.
+export const authIpRateLimit = rateLimit({
+	limit: 60,
+	windowMs: 15 * 60 * 1000,
+	standardHeaders: true,
+	legacyHeaders: false,
+	message: {
+		error: {
+			message: 'Too many sign-in attempts from this network. Please wait and try again later.',
+		},
+	},
+});
+// Rate limiting uses Express's client IP after the explicitly configured proxy
+// chain, never a forwarding header supplied directly by the caller.
 // TODO: configure public-read, auth, write, and upload limits separately, with
 // Redis-backed storage when available.

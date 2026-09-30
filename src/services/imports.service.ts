@@ -13,47 +13,29 @@ import { detectChapterBoundaries, splitBlocksIntoChapters } from './importers/ch
 import { buildNormalizedChapter } from './importers/contentNormalizer';
 import { deleteImportImages, deleteManuscriptFile } from './importers/imageExtractor';
 import { sanitizeHtml, sanitizeTitle } from './importers/sanitizer';
-import { getSupabaseAdmin, supabase } from '../config/supabase';
+import { getSupabaseAdmin } from '../config/supabase';
 
 const MANUSCRIPTS_BUCKET = 'manuscripts';
-
-function getStorageClient() {
-  try {
-    return getSupabaseAdmin();
-  } catch {
-    return supabase;
-  }
-}
 
 async function uploadManuscriptFile(
   fileBuffer: Buffer,
   context: ImportContext,
   originalFilename: string,
   mimeType: string,
-): Promise<string | null> {
+): Promise<string> {
   const safeExt = originalFilename.split('.').pop()?.toLowerCase() ?? 'bin';
   const storagePath = `${context.userId}/${context.storyId}/${context.importId}/original.${safeExt}`;
 
-  try {
-    const client = getStorageClient();
-    const { error } = await client.storage
-      .from(MANUSCRIPTS_BUCKET)
-      .upload(storagePath, fileBuffer, {
-        contentType: mimeType,
-        cacheControl: '3600',
-        upsert: true,
-      });
+  const { error } = await getSupabaseAdmin().storage
+    .from(MANUSCRIPTS_BUCKET)
+    .upload(storagePath, fileBuffer, {
+      contentType: mimeType,
+      cacheControl: '3600',
+      upsert: false,
+    });
 
-    if (error) {
-      console.warn(`[ImportsService] Storage upload notice:`, error.message);
-      return null;
-    }
-
-    return storagePath;
-  } catch (err) {
-    console.warn('[ImportsService] Storage error notice:', err);
-    return null;
-  }
+  if (error) throw error;
+  return storagePath;
 }
 
 export async function processImport(
@@ -82,27 +64,37 @@ export async function processImport(
     userId,
   };
 
-  const storagePath = await uploadManuscriptFile(
-    file.buffer,
-    context,
-    file.originalname,
-    file.mimetype || (fileType === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
-  );
+  let storagePath: string;
+  try {
+    storagePath = await uploadManuscriptFile(
+      file.buffer,
+      context,
+      file.originalname,
+      file.mimetype || (fileType === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+    );
+  } catch {
+    throw new ApiError(503, 'Private manuscript storage is unavailable. Please try again later.');
+  }
 
-  await importsRepository.createImport({
-    id: importId,
-    story_id: storyId,
-    user_id: userId,
-    original_filename: file.originalname,
-    storage_path: storagePath,
-    file_type: fileType,
-    file_size: file.size,
-    status: 'PROCESSING',
-    error_message: null,
-    result: null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  });
+  try {
+    await importsRepository.createImport({
+      id: importId,
+      story_id: storyId,
+      user_id: userId,
+      original_filename: file.originalname,
+      storage_path: storagePath,
+      file_type: fileType,
+      file_size: file.size,
+      status: 'PROCESSING',
+      error_message: null,
+      result: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+  } catch {
+    await deleteManuscriptFile(storagePath);
+    throw new ApiError(503, 'Manuscript imports are not available right now. Please try again later.');
+  }
 
   try {
     let blocks;
@@ -253,6 +245,8 @@ export async function commitImport(
       title: cleanTitle,
       content: cleanHtml,
       content_type: (story.content_type as 'text' | 'comic') ?? 'text',
+		has_text: ((story.content_type as 'text' | 'comic') ?? 'text') === 'text',
+		has_comic: ((story.content_type as 'text' | 'comic') ?? 'text') === 'comic',
       status: 'draft',
       chapter_order: nextOrder,
       published_at: null,

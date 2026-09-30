@@ -1,99 +1,44 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// ReadAgora Backend — Imports Repository
-// ─────────────────────────────────────────────────────────────────────────────
-import { getSupabaseAdmin, supabase } from '../config/supabase';
+import { getSupabaseAdmin } from '../config/supabase';
 import type { ManuscriptImportRecord } from '../services/importers/types';
 
-// In-memory fallback cache
-const memoryImports = new Map<string, ManuscriptImportRecord>();
-
 export async function deleteAccountImports(userId: string) {
-  const { error } = await getSupabaseAdmin().from('manuscript_imports').delete().eq('user_id', userId);
-  if (error && error.code !== 'PGRST205' && error.code !== '42P01') throw error;
-  for (const [id, record] of memoryImports) if (record.user_id === userId) memoryImports.delete(id);
-}
-
-function getDbClient() {
-  try {
-    return getSupabaseAdmin();
-  } catch {
-    return supabase;
-  }
+	const { error } = await getSupabaseAdmin()
+		.from('manuscript_imports')
+		.delete()
+		.eq('user_id', userId);
+	if (error) throw error;
 }
 
 export async function createImport(record: ManuscriptImportRecord): Promise<ManuscriptImportRecord> {
-  memoryImports.set(record.id, record);
-
-  try {
-    const client = getDbClient();
-    const { data, error } = await client
-      .from('manuscript_imports')
-      .insert(record)
-      .select()
-      .single();
-
-    if (!error && data) {
-      return data as ManuscriptImportRecord;
-    }
-  } catch (err) {
-    console.warn('[ImportsRepository] Supabase insert notice (using memory cache):', err);
-  }
-
-  return record;
+	const { data, error } = await getSupabaseAdmin()
+		.from('manuscript_imports')
+		.insert(record)
+		.select()
+		.single();
+	if (error) throw error;
+	if (!data) throw new Error('Import record was not saved.');
+	return data as ManuscriptImportRecord;
 }
 
 export async function findImportById(importId: string, userId: string): Promise<ManuscriptImportRecord | null> {
-  const memoryRecord = memoryImports.get(importId);
-  if (memoryRecord && memoryRecord.user_id === userId) {
-    return memoryRecord;
-  }
-
-  try {
-    const client = getDbClient();
-    const { data, error } = await client
-      .from('manuscript_imports')
-      .select('*')
-      .eq('id', importId)
-      .eq('user_id', userId)
-      .single();
-
-    if (!error && data) {
-      return data as ManuscriptImportRecord;
-    }
-  } catch (err) {
-    console.warn('[ImportsRepository] Supabase find notice:', err);
-  }
-
-  return memoryRecord ?? null;
+	const { data, error } = await getSupabaseAdmin()
+		.from('manuscript_imports')
+		.select('*')
+		.eq('id', importId)
+		.eq('user_id', userId)
+		.maybeSingle();
+	if (error) throw error;
+	return data as ManuscriptImportRecord | null;
 }
 
 export async function updateImport(
-  importId: string,
-  status: ManuscriptImportRecord['status'],
-  extra: Partial<Pick<ManuscriptImportRecord, 'error_message' | 'result'>> = {},
+	importId: string,
+	status: ManuscriptImportRecord['status'],
+	extra: Partial<Pick<ManuscriptImportRecord, 'error_message' | 'result'>> = {},
 ): Promise<void> {
-  const existing = memoryImports.get(importId);
-  if (existing) {
-    const updated: ManuscriptImportRecord = {
-      ...existing,
-      status,
-      updated_at: new Date().toISOString(),
-      ...extra,
-    };
-    memoryImports.set(importId, updated);
-  }
-
-  try {
-    const client = getDbClient();
-    await client
-      .from('manuscript_imports')
-      .update({
-        status,
-        updated_at: new Date().toISOString(),
-        ...extra,
-      })
-      .eq('id', importId);
-  } catch (err) {
-    console.warn('[ImportsRepository] Supabase update notice:', err);
-  }
+	const { error } = await getSupabaseAdmin()
+		.from('manuscript_imports')
+		.update({ status, updated_at: new Date().toISOString(), ...extra })
+		.eq('id', importId);
+	if (error) throw error;
 }

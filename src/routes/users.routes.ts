@@ -8,6 +8,7 @@ import { asyncHandler } from '../utils/asyncHandler';
 const router = Router();
 
 router.get('/users/me', auth, asyncHandler(usersController.getCurrentProfile));
+router.get('/users/me/monetization', auth, asyncHandler(usersController.getMonetizationStatus));
 router.get('/users/me/stories', auth, asyncHandler(usersController.getCurrentStories));
 router.get('/users/me/follower-count', auth, asyncHandler(usersController.getCurrentFollowerCount));
 router.patch('/users/me', auth, asyncHandler(usersController.updateCurrentProfile));
