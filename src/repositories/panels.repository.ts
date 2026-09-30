@@ -1,5 +1,7 @@
 import { getSupabaseAdmin } from '../config/supabase';
 
+type ComicPanelOrderRow = { id: string; panel_order: number };
+
 export async function listPanels(chapterId: string) {
 	const { data, error } = await getSupabaseAdmin()
 		.from('comic_panels')
@@ -95,7 +97,7 @@ export async function deletePanel(panelId: string) {
 }
 
 export async function resequencePanels(chapterId: string) {
-	const panels = await listPanels(chapterId);
+	const panels: ComicPanelOrderRow[] = await listPanels(chapterId);
 	await writePanelOrder(chapterId, panels.map((panel, index) => ({
 		id: panel.id,
 		panel_order: index + 1,
