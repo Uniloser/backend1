@@ -76,8 +76,8 @@ async function hasActiveSubscription(userId: string) {
 		.from('subscriptions')
 		.select('id')
 		.eq('user_id', userId)
-		.eq('status', 'ACTIVE')
-		.gt('current_period_end', new Date().toISOString())
+		.in('status', ['ACTIVE', 'GRACE_PERIOD'])
+		.or(`current_period_end.is.null,current_period_end.gt.${new Date().toISOString()}`)
 		.limit(1);
 	if (error) throw error;
 	return Boolean(data?.length);

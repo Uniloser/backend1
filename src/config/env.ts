@@ -41,6 +41,7 @@ export const env = {
 	supabaseAnonKey: requiredEnv('SUPABASE_ANON_KEY'),
 	supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY
 		?? process.env.SUPABASE_SECRET_KEY,
+	revenueCatWebhookAuthToken: process.env.REVENUECAT_WEBHOOK_AUTH_TOKEN,
 	redisUrl: process.env.REDIS_URL,
 	coverBucket: process.env.SUPABASE_COVER_BUCKET ?? 'covers',
 	avatarBucket: process.env.SUPABASE_AVATAR_BUCKET ?? 'avatars',

@@ -26,6 +26,7 @@ import promotionsRouter from './routes/promotions.routes';
 import analyticsRouter from './routes/analytics.routes';
 import importsRouter from './routes/imports.routes';
 import mediaRouter from './routes/media.routes';
+import revenueCatRouter from './routes/revenuecat.routes';
 import { errorHandler } from './middleware/errorHandler.middleware';
 import { env } from './config/env';
 
@@ -56,6 +57,7 @@ app.use(analyticsRouter);
 app.use(uploadsRouter);
 app.use(importsRouter);
 app.use(mediaRouter);
+app.use(revenueCatRouter);
 app.use(reportsRouter);
 app.use(bookmarksRouter);
 app.use(notificationsRouter);
