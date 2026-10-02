@@ -38,6 +38,14 @@ export async function feed(user: string|undefined, tab: string, limit: number, o
  if(tab==='for-you') items.sort((a,b)=>rankPost(b,new Set(followed))-rankPost(a,new Set(followed)));
  return {items,next_offset:raw.length>limit?offset+limit:null};
 }
+export async function postsByUser(authorId: string, user: string|undefined, limit: number, offset: number) {
+ const blocked=await blockedIds(user);
+ if(blocked.includes(authorId)) return {items:[],next_offset:null};
+ const raw=await rows(db().from('community_posts').select(selection).eq('user_id',authorId).order('created_at',{ascending:false}).order('id',{ascending:false}).range(offset,offset+limit));
+ const visible=raw.slice(0,limit).filter(p=>(!p.story||p.story.status==='published')&&(!p.chapter||p.chapter.status==='published'));
+ const items=await hydrateMany(visible,user);
+ return {items,next_offset:raw.length>limit?offset+limit:null};
+}
 export async function createPost(user: string, input: any) {
  if(input.story_id) {
   const story=await one(db().from('stories').select('id,author_id,status').eq('id',input.story_id).maybeSingle());

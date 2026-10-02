@@ -10,6 +10,7 @@ const handle=(fn:(req:any)=>Promise<any>)=>asyncHandler(async(req:any,res:any)=>
 const id=(req:any)=>v.communityId.parse(req.params.id);
 router.get('/community',optionalAuth,handle(req=>{const q=v.communityQuery.parse(req.query);return repo.feed(req.user?.id,q.tab,q.limit,q.offset);}));
 router.get('/community/sidebar',optionalAuth,handle(req=>repo.sidebar(req.user?.id)));
+router.get('/community/users/:id/posts',optionalAuth,handle(req=>{const userId=v.communityId.parse(req.params.id);const q=v.communityQuery.parse(req.query);return repo.postsByUser(userId,req.user?.id,q.limit,q.offset);}));
 router.get('/community/posts/:id',optionalAuth,handle(async req=>repo.hydrate(await repo.getPost(id(req),req.user?.id),req.user?.id)));
 router.post('/community/posts',auth,writes,handle(req=>repo.createPost(req.user.id,v.communityPostInput.parse(req.body))));
 router.delete('/community/posts/:id',auth,writes,handle(req=>repo.removePost(id(req),req.user.id)));
