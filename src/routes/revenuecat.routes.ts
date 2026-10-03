@@ -3,6 +3,8 @@ import express from 'express';
 
 import { env } from '../config/env';
 import { getSupabaseAdmin } from '../config/supabase';
+import * as walletService from '../services/wallet.service';
+import { getPremiumGemReward } from '../services/premiumGemRewards';
 import { asyncHandler } from '../utils/asyncHandler';
 
 const router = express.Router();
@@ -89,6 +91,13 @@ router.post('/webhooks/revenuecat', asyncHandler(async (request: any, response: 
 		cancelled_at: eventType === 'CANCELLATION' ? new Date(eventTimestamp).toISOString() : null,
 		updated_at: new Date().toISOString(),
 	};
+	const gemReward = status === 'ACTIVE' ? getPremiumGemReward({
+		userId: appUserId,
+		plan: mapPlan(productId),
+		eventType,
+		transactionId: String(event.transaction_id ?? event.id ?? providerTransactionId),
+	}) : null;
+	if (gemReward) await walletService.awardGems({ userId: appUserId, ...gemReward });
 	const { error: upsertError } = await supabase.from('subscriptions').upsert(record, { onConflict: 'provider,provider_subscription_id' });
 	if (upsertError) throw upsertError;
 	response.status(200).json({ received: true });
