@@ -38,6 +38,8 @@ export async function createStory(authorId: string, input: CreateStoryInput) {
 		author_id: authorId,
 		tags: input.tags ?? [],
 		content_type: input.content_type ?? 'text',
+		is_ai_assisted: input.is_ai_assisted ?? false,
+		content_warnings: input.content_warnings ?? [],
 		status: 'draft',
 	});
 }

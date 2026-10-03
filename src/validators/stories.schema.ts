@@ -4,6 +4,11 @@ const { z } = require('zod') as {
 
 const contentType = z.enum(['text', 'comic']);
 const genre = z.string().trim().min(1).max(80);
+const contentWarning = z.enum(['graphic_violence', 'profanity', 'sensitive_content', 'sexual_content']);
+const contentWarnings = z.array(contentWarning).max(4).refine(
+	(warnings: string[]) => new Set(warnings).size === warnings.length,
+	{ message: 'Content warnings must not contain duplicates' },
+);
 
 const storyFields = {
 	title: z.string().trim().min(1).max(200),
@@ -13,6 +18,8 @@ const storyFields = {
 	cover_url: z.string().url().nullable().optional(),
 	content_type: contentType.optional(),
 	is_ai_generated: z.boolean().optional(),
+	is_ai_assisted: z.boolean().optional(),
+	content_warnings: contentWarnings.optional(),
 };
 
 export const createStorySchema = z.object(storyFields);
@@ -35,6 +42,8 @@ export type CreateStoryInput = {
 	cover_url?: string | null;
 	content_type?: 'text' | 'comic';
 	is_ai_generated?: boolean;
+	is_ai_assisted?: boolean;
+	content_warnings?: Array<'graphic_violence' | 'profanity' | 'sensitive_content' | 'sexual_content'>;
 };
 
 export type UpdateStoryInput = Partial<CreateStoryInput> & {

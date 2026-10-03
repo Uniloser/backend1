@@ -44,6 +44,12 @@ test('strong and recent actions outweigh old opens',()=>{
   assert.ok(strong.genres.fantasy>weak.genres.fantasy);
   assert.ok(strong.genres.fantasy<1);
 });
+test('AI and content-warning disclosures do not become reader interests',()=>{
+  const p=profile([signal({tags:['magic','ai-assisted','content-warning:graphic-violence','AI-generated']})]);
+  assert.deepEqual(Object.keys(p.tags),['magic']);
+  assert.equal(p.tags['ai-assisted'],undefined);
+  assert.equal(recommendationScore(story('disclosures',{tags:['ai-assisted','content-warning:profanity']}),p,0,now),recommendationScore(story('no-tags',{tags:[]}),p,0,now));
+});
 test('selected interests personalize cold start',()=>{
   const p=buildProfile([],[],{genres:['Romance'],tags:[],allowMature:false,showAiGenerated:true},now);
   assert.equal(p.personalized,true);

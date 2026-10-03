@@ -3,6 +3,10 @@ import type { Candidate, Metrics, Preferences, Profile, Signal } from './types';
 const DAY = 86400000;
 export const daysAgo = (date: string, now = Date.now()) => Math.max(0, (now - (Date.parse(date) || now)) / DAY);
 const clamp = (n: number) => Math.min(1, Math.max(0, Number(n) || 0));
+const isDisclosureTag = (tag: string) => {
+  const normalized = tag.toLowerCase();
+  return normalized === 'ai-generated' || normalized === 'ai-assisted' || normalized.startsWith('content-warning:');
+};
 export function trendingScore(m: Metrics, now = Date.now()) {
   const w = C.trending;
   return (m.readers_7d * w.readers + m.likes_7d * w.likes + m.bookmarks_7d * w.bookmarks + m.comments_7d * w.comments + m.followers_7d * w.followers) / (1 + daysAgo(m.last_activity_at, now) * w.decay);
@@ -31,19 +35,20 @@ export function buildProfile(signals: Signal[], followed: string[], preferences:
     if (s.abandoned) p.abandoned.add(s.story_id);
     const weight = ((s.opened ? w.open : 0) + Math.min(s.chapters_read, 3) * w.chapter + (s.chapters_read >= 2 ? w.multiple : 0) + (s.liked ? w.like : 0) + (s.bookmarked ? w.bookmark : 0) + (s.completed ? w.complete : 0)) * Math.pow(0.5, daysAgo(s.occurred_at, now) / w.halfLifeDays);
     add(p.genres, s.genre, weight); add(p.authors, s.author_id, weight);
-    for (const tag of s.tags ?? []) add(p.tags, tag, weight);
+    for (const tag of s.tags ?? []) if (!isDisclosureTag(tag)) add(p.tags, tag, weight);
   }
   for (const author of followed) add(p.authors, author, w.follow);
   for (const map of [p.genres, p.tags, p.authors]) for (const key of Object.keys(map)) map[key] /= map[key] + w.prior;
   const explicit = 0.7 / (1 + signals.length / 10);
   for (const g of preferences.genres) p.genres[g.toLowerCase()] = Math.max(p.genres[g.toLowerCase()] ?? 0, explicit);
-  for (const t of preferences.tags) p.tags[t.toLowerCase()] = Math.max(p.tags[t.toLowerCase()] ?? 0, explicit);
+  for (const t of preferences.tags) if (!isDisclosureTag(t)) p.tags[t.toLowerCase()] = Math.max(p.tags[t.toLowerCase()] ?? 0, explicit);
   return p;
 }
 export function recommendationScore(s: Candidate, p: Profile, collaborative = 0, now = Date.now()) {
   const w = C.recommendation;
   const genre = p.genres[s.genre.toLowerCase()] ?? 0;
-  const tags = s.tags.length ? s.tags.reduce((sum, t) => sum + (p.tags[t.toLowerCase()] ?? 0), 0) / s.tags.length : 0;
+  const interestTags = s.tags.filter(tag => !isDisclosureTag(tag));
+  const tags = interestTags.length ? interestTags.reduce((sum, t) => sum + (p.tags[t.toLowerCase()] ?? 0), 0) / interestTags.length : 0;
   const fresh = 1 / (1 + daysAgo(s.last_chapter_published_at, now) * C.trending.decay);
   const global = qualityScore(s.metrics) * w.quality + fresh * w.freshness;
   const momentum = Math.log1p(trendingScore(s.metrics, now));

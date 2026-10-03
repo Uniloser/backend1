@@ -11,6 +11,7 @@
     "test": "tsx scripts/test-api.ts",
     "test:promotions": "tsx --test scripts/test-promotions-pricing.ts scripts/test-premium-gem-rewards.ts",
     "test:story-ads": "tsx --test scripts/test-story-ad-rotation.ts",
+    "test:stories": "tsx --test scripts/test-story-disclosures.ts",
     "test:discovery": "tsc -p tsconfig.discovery-tests.json && node --test .discovery-test-dist/scripts/test-discovery.js .discovery-test-dist/scripts/test-discovery-service.js",
     "discovery:refresh": "tsx scripts/refresh-discovery.ts"
   },
