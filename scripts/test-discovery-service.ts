@@ -10,11 +10,12 @@ const service=require('../src/services/discovery.service');
 const controller=require('../src/controllers/discovery.controller');
 const { ApiError }=require('../src/utils/ApiError');
 const date=new Date().toISOString();
-const pool=Array.from({length:60},(_,i)=>repository.normalizeCandidate({id:`10000000-0000-4000-8000-${String(i).padStart(12,'0')}`,author_id:`author${i}`,title:`Story ${i}`,description:'Synopsis',cover_url:'https://example.test/cover',genre:i%2?'Fantasy':'Romance',tags:[],status:'published',created_at:date,updated_at:date,view_count:0,author:{id:`author${i}`,username:`author${i}`,display_name:null,avatar_url:null},metrics:{},published_at:date,last_chapter_published_at:date,visibility:'public',moderation_status:'approved',is_mature:false,is_complete:false,chapters_published:1,author_active:true,trending_score:0,rising_score:0,quality_score:0,hidden_gem_score:0}));
-const ctx={signals:[],followed:[],blocked:new Set<string>(),hidden:new Set<string>(),consumed:new Set<string>(),preferences:{genres:[],tags:[],allowMature:false}};
+const pool=Array.from({length:60},(_,i)=>repository.normalizeCandidate({id:`10000000-0000-4000-8000-${String(i).padStart(12,'0')}`,author_id:`author${i}`,title:`Story ${i}`,description:'Synopsis',cover_url:'https://example.test/cover',genre:i%2?'Fantasy':'Romance',tags:[],status:'published',created_at:date,updated_at:date,view_count:0,author:{id:`author${i}`,username:`author${i}`,display_name:null,avatar_url:null},metrics:{},published_at:date,last_chapter_published_at:date,visibility:'public',moderation_status:'approved',is_mature:false,is_complete:false,chapters_published:1,author_active:true,is_ai_generated:i>=50,trending_score:0,rising_score:0,quality_score:0,hidden_gem_score:0}));
+const ctx={signals:[],followed:[],blocked:new Set<string>(),hidden:new Set<string>(),consumed:new Set<string>(),preferences:{genres:[],tags:[],allowMature:false,showAiGenerated:true}};
 let savedEvents:any[]=[];
 mock.method(repository,'context',async()=>ctx);
 mock.method(repository,'globalIds',async()=>pool.map(s=>s.id));
+mock.method(repository,'aiGeneratedIds',async()=>pool.filter(s=>s.is_ai_generated).map(s=>s.id));
 mock.method(repository,'genres',async()=>[{name:'Fantasy',slug:'fantasy'},{name:'Romance',slug:'romance'}]);
 mock.method(repository,'interestIds',async()=>[]);
 mock.method(repository,'collaborative',async()=>[]);
@@ -38,6 +39,37 @@ test('pagination keeps stable ordering, positions and no repeats while recheckin
   assert.ok(!second.stories.some((s:any)=>shelf.stories.some((first:any)=>first.id===s.id)));
   for(const s of second.stories) assert.equal(session.ordered.for_you[second.positions[s.id]],s.id);
   ctx.blocked.clear();
+});
+test('AI-generated stories appear only in their dedicated shelf when enabled',async()=>{
+  const response=await service.discover('reader',5);
+  const aiShelf=response.shelves.find((s:any)=>s.type==='ai_generated');
+  assert.ok(aiShelf);
+  assert.equal(aiShelf.title,'AI Stories');
+  assert.ok(aiShelf.stories.length>0);
+  assert.ok(aiShelf.stories.every((s:any)=>s.is_ai_generated));
+  assert.ok(response.shelves.filter((s:any)=>s.type!=='ai_generated').every((s:any)=>s.stories.every((story:any)=>!story.is_ai_generated)));
+});
+test('disabling AI stories excludes them from initial shelves',async()=>{
+  ctx.preferences.showAiGenerated=false;
+  try {
+    const response=await service.discover('reader',5);
+    assert.ok(!response.shelves.some((s:any)=>s.type==='ai_generated'));
+    assert.ok(response.shelves.every((s:any)=>s.stories.every((story:any)=>!story.is_ai_generated)));
+  } finally {
+    ctx.preferences.showAiGenerated=true;
+  }
+});
+test('turning AI stories off mid-session excludes them from later pages',async()=>{
+  const response=await service.discover('reader',5);
+  const shelf=response.shelves.find((s:any)=>s.type==='ai_generated');
+  assert.ok(shelf?.nextCursor);
+  ctx.preferences.showAiGenerated=false;
+  try {
+    const page=await service.loadMore(shelf.nextCursor,'reader',5);
+    assert.ok(page.shelves[0].stories.every((story:any)=>!story.is_ai_generated));
+  } finally {
+    ctx.preferences.showAiGenerated=true;
+  }
 });
 test('session cursors cannot be shared between users',async()=>{
   const response=await service.discover('alice',5);
@@ -71,4 +103,14 @@ test('controller validates limits and preserves the data envelope',async()=>{
   assert.ok(response.data.shelves);
   assert.equal(cacheControl,'private, no-store');
   await assert.rejects(()=>controller.discover({query:{limit:'1000'}},{set:()=>{},json:()=>{}}));
+});
+test('updating AI visibility preserves the reader’s other discovery preferences',async()=>{
+  const existing={genres:['Fantasy'],tags:['dragons'],allowMature:true,showAiGenerated:true};
+  let saved:any;
+  mock.method(repository,'getPreferences',async()=>existing);
+  mock.method(repository,'savePreferences',async(_userId:string,value:any)=>{saved=value; return value;});
+  let response:any;
+  await controller.preferences({user:{id:'reader'},body:{showAiGenerated:false}},{json:(body:any)=>{response=body;}});
+  assert.deepEqual(saved,{...existing,showAiGenerated:false});
+  assert.deepEqual(response.data,saved);
 });

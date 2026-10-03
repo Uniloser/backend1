@@ -41,12 +41,25 @@ export async function discover(userId?: string,limit: number=C.limits.shelf): Pr
   const topGenres=genres.filter(g=>profile.genres[g.name.toLowerCase()]).sort((a,b)=>(profile.genres[b.name.toLowerCase()]??0)-(profile.genres[a.name.toLowerCase()]??0)).slice(0,C.limits.genreShelves).map(g=>g.name);
   const topTags=Object.entries(profile.tags).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([tag])=>tag);
   const seeds=ctx.signals.filter(meaningful).slice(0,5).map(s=>s.story_id);
-  const [interests,collaborative,similar]=await Promise.all([
+  const [interests,collaborative,similar,aiGenerated]=await Promise.all([
     repository.interestIds(topGenres,topTags,ctx.followed),repository.collaborative(seeds,userId),repository.collaborative(seeds.slice(0,1),userId),
+    ctx.preferences.showAiGenerated ? repository.aiGeneratedIds() : Promise.resolve([]),
   ]);
-  const pool=await repository.hydrate([...global,...interests,...collaborative.map(r=>r.story_id),...similar.map(r=>r.story_id),...seeds]);
+  const pool=await repository.hydrate([...global,...interests,...collaborative.map(r=>r.story_id),...similar.map(r=>r.story_id),...seeds,...aiGenerated]);
   const now=Date.now();
-  const {shelves,ordered}=assemble(pool,profile,normalized(collaborative),{blocked:ctx.blocked,hidden:ctx.hidden,allowMature:ctx.preferences.allowMature,limit,now,genreNames:genres.map(g=>g.name),similar:normalized(similar)});
+  const {shelves,ordered}=assemble(pool.filter(story=>!story.is_ai_generated),profile,normalized(collaborative),{blocked:ctx.blocked,hidden:ctx.hidden,allowMature:ctx.preferences.allowMature,limit,now,genreNames:genres.map(g=>g.name),similar:normalized(similar)});
+  if(ctx.preferences.showAiGenerated) {
+    const aiStories=pool.filter(story=>story.is_ai_generated
+      && isStoryEligibleForDiscovery(story,ctx.blocked,ctx.preferences.allowMature)
+      && !ctx.hidden.has(story.id));
+    if(aiStories.length) {
+      const id='ai_generated';
+      const selected=diversify([...aiStories].sort((a,b)=>recommendationScore(b,profile,0,now)-recommendationScore(a,profile,0,now)||a.id.localeCompare(b.id)),limit);
+      const selectedIds=new Set(selected.map(story=>story.id));
+      ordered[id]=[...selected.map(story=>story.id),...aiStories.filter(story=>!selectedIds.has(story.id)).map(story=>story.id)];
+      shelves.push({id,type:'ai_generated',title:'AI Stories',stories:selected.map(storyCard)});
+    }
+  }
   const id=randomUUID();
   for(const shelf of shelves) {
     shelf.nextCursor=ordered[shelf.id].length>shelf.stories.length ? encodeCursor(id,shelf.id,shelf.stories.length) : null;
@@ -69,7 +82,10 @@ export async function loadMore(cursor: string,userId?: string,limit: number=C.li
   let next=offset;
   while(next<Math.min(ids.length,C.limits.maxOffset) && selected.length<limit) {
     const s=byId.get(ids[next++]);
-    if(!s || !isStoryEligibleForDiscovery(s,ctx.blocked,ctx.preferences.allowMature) || ctx.hidden.has(s.id) || ((shelf.type==='for_you'||shelf.type==='because_you_read')&&consumed.has(s.id))) continue;
+    if(!s || !isStoryEligibleForDiscovery(s,ctx.blocked,ctx.preferences.allowMature) || ctx.hidden.has(s.id)
+      || (shelf.type==='ai_generated'&&!ctx.preferences.showAiGenerated)
+      || (shelf.type==='ai_generated' ? !s.is_ai_generated : s.is_ai_generated)
+      || ((shelf.type==='for_you'||shelf.type==='because_you_read')&&consumed.has(s.id))) continue;
     if((authors.get(s.author_id)??0)>=C.limits.maxAuthor) continue;
     authors.set(s.author_id,(authors.get(s.author_id)??0)+1); selected.push(s);
   }

@@ -27,6 +27,16 @@ export async function globalIds(kind: 'trending' | 'rising' | 'hidden_gems' | 'r
   const rows = await data<Array<{ id: string }>>(db.from('discovery_eligible').select('id').gt(field, 0).order(field, { ascending: false }).order('id').limit(C.limits.candidates));
   return rows.map(r => r.id);
 }
+export async function aiGeneratedIds() {
+  const rows = await data<Array<{ id: string }>>(getSupabaseAdmin()
+    .from('discovery_eligible')
+    .select('id')
+    .eq('is_ai_generated', true)
+    .order('published_at', { ascending: false })
+    .order('id')
+    .limit(C.limits.candidates));
+  return rows.map(row => row.id);
+}
 export async function interestIds(genres: string[], tags: string[], authors: string[]) {
   const db = getSupabaseAdmin();
   const base = () => db.from('discovery_eligible').select('id').order('published_at', { ascending: false }).order('id').limit(C.limits.candidates);
@@ -37,7 +47,7 @@ export async function interestIds(genres: string[], tags: string[], authors: str
   return (await Promise.all(queries)).flat().map(s => s.id);
 }
 export async function context(userId?: string) {
-  const empty = { signals: [] as Signal[], followed: [] as string[], blocked: new Set<string>(), hidden: new Set<string>(), consumed: new Set<string>(), preferences: { genres: [], tags: [], allowMature: false } as Preferences };
+  const empty = { signals: [] as Signal[], followed: [] as string[], blocked: new Set<string>(), hidden: new Set<string>(), consumed: new Set<string>(), preferences: { genres: [], tags: [], allowMature: false, showAiGenerated: true } as Preferences };
   if (!userId) return empty;
   const db = getSupabaseAdmin();
   const [signals, follows, blocks, user] = await Promise.all([
@@ -57,6 +67,21 @@ export async function genres() { return data<Array<{ name: string; slug: string 
 export async function savePreferences(userId: string, preferences: Preferences) {
   await data(getSupabaseAdmin().from('user_discovery_preferences').upsert({ user_id: userId, preferences },{onConflict:'user_id'})); return preferences;
 }
+export async function getPreferences(userId: string): Promise<Preferences> {
+  const { data: row, error } = await getSupabaseAdmin()
+    .from('user_discovery_preferences')
+    .select('preferences')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return {
+    genres: [],
+    tags: [],
+    allowMature: false,
+    showAiGenerated: true,
+    ...row?.preferences,
+  };
+}
 export async function recordEvents(userId: string | undefined, events: Array<{ event_type: string; story_id?: string; metadata: Record<string, unknown> }>) {
   await data(getSupabaseAdmin().from('user_events').insert(events.map(e => ({ ...e, user_id: userId ?? null }))));
 }
@@ -74,6 +99,7 @@ export async function browse(options: {userId?:string;genre?:string;query?:strin
   const ctx=await context(options.userId);
   let query=getSupabaseAdmin().from('discovery_eligible').select('*');
   if(!ctx.preferences.allowMature) query=query.eq('is_mature',false);
+  if(!ctx.preferences.showAiGenerated) query=query.eq('is_ai_generated',false);
   if(ctx.blocked.size) query=query.not('author_id','in',`(${[...ctx.blocked].join(',')})`);
   if(ctx.hidden.size) query=query.not('id','in',`(${[...ctx.hidden].join(',')})`);
   if(options.genre) query=query.eq('genre',options.genre);

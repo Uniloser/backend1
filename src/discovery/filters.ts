@@ -19,6 +19,6 @@ export function diversify(ranked: Candidate[], count: number, used = new Set<str
   return selected;
 }
 export function storyCard(s: Candidate): StoryCard {
-  const { id, author_id, title, description, cover_url, genre, tags, status, created_at, updated_at, view_count, content_type, author } = s;
-  return { id, author_id, title, description, cover_url, genre, tags, status, created_at, updated_at, view_count, content_type, author };
+  const { id, author_id, title, description, cover_url, genre, tags, status, created_at, updated_at, view_count, content_type, is_ai_generated, author } = s;
+  return { id, author_id, title, description, cover_url, genre, tags, status, created_at, updated_at, view_count, content_type, is_ai_generated, author };
 }

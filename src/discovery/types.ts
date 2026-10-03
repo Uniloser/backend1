@@ -1,7 +1,7 @@
 export type StoryCard = {
   id: string; author_id: string; title: string; description: string | null; cover_url: string | null;
   genre: string; tags: string[]; status: 'published' | 'draft'; created_at: string; updated_at: string;
-  view_count: number; content_type?: string;
+  view_count: number; content_type?: string; is_ai_generated: boolean;
   author: { id: string; username: string; display_name: string | null; avatar_url: string | null; is_alpha?: boolean };
 };
 export type Metrics = {
@@ -23,12 +23,12 @@ export type Candidate = StoryCard & {
 export type Signal = { story_id: string; genre: string; tags: string[]; author_id: string; title: string;
   opened: boolean; chapters_read: number; liked: boolean; bookmarked: boolean; completed: boolean;
   started: boolean; abandoned: boolean; occurred_at: string };
-export type Preferences = { genres: string[]; tags: string[]; allowMature: boolean };
+export type Preferences = { genres: string[]; tags: string[]; allowMature: boolean; showAiGenerated: boolean };
 export type Profile = {
   genres: Record<string, number>; tags: Record<string, number>; authors: Record<string, number>;
   consumed: Set<string>; abandoned: Set<string>; signals: Signal[]; personalized: boolean;
 };
-export type ShelfType = 'for_you' | 'trending' | 'rising' | 'recently_updated' | 'because_you_read' | 'hidden_gems' | 'genre';
+export type ShelfType = 'for_you' | 'trending' | 'rising' | 'recently_updated' | 'because_you_read' | 'hidden_gems' | 'genre' | 'ai_generated';
 export type Shelf = { id: string; type: ShelfType; title: string; stories: StoryCard[];
   sourceStory?: { id: string; title: string }; nextCursor?: string | null; positions?: Record<string,number> };
 export type DiscoveryResponse = { userPersonalized: boolean; generatedAt: string; recommendationSessionId: string; shelves: Shelf[] };

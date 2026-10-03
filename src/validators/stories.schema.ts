@@ -12,6 +12,7 @@ const storyFields = {
 	tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
 	cover_url: z.string().url().nullable().optional(),
 	content_type: contentType.optional(),
+	is_ai_generated: z.boolean().optional(),
 };
 
 export const createStorySchema = z.object(storyFields);
@@ -33,6 +34,7 @@ export type CreateStoryInput = {
 	tags?: string[];
 	cover_url?: string | null;
 	content_type?: 'text' | 'comic';
+	is_ai_generated?: boolean;
 };
 
 export type UpdateStoryInput = Partial<CreateStoryInput> & {

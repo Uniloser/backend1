@@ -12,6 +12,7 @@ const router = Router();
 const discoveryLimit = rateLimit({ windowMs: 60000, limit: 60, standardHeaders: true, legacyHeaders: false });
 const discoveryEventsLimit = rateLimit({ windowMs: 60000, limit: 30, standardHeaders: true, legacyHeaders: false });
 router.get('/discovery', optionalAuth, discoveryLimit, asyncHandler(discoveryController.discover));
+router.get('/discovery/preferences', auth, discoveryLimit, asyncHandler(discoveryController.getPreferences));
 router.put('/discovery/preferences', auth, discoveryLimit, asyncHandler(discoveryController.preferences));
 router.post('/discovery/events', optionalAuth, discoveryEventsLimit, asyncHandler(discoveryController.events));
 
