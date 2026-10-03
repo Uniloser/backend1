@@ -1,7 +1,8 @@
 import * as storyAdsService from '../services/storyAds.service';
 
-export async function getActiveAd(_request: any, response: any) {
-	response.json({ data: await storyAdsService.getActiveAd() });
+export async function getActiveAd(request: any, response: any) {
+	const sessionId = typeof request.query?.session_id === 'string' ? request.query.session_id : undefined;
+	response.json({ data: await storyAdsService.getActiveAd({ userId: request.user?.id, sessionId }) });
 }
 
 export async function recordImpression(request: any, response: any) {
