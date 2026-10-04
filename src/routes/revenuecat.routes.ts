@@ -51,12 +51,31 @@ router.post('/webhooks/revenuecat', asyncHandler(async (request: any, response: 
 		response.status(400).json({ error: 'Invalid RevenueCat event fields.' });
 		return;
 	}
+	const supabase = getSupabaseAdmin();
+	const { data: coinProduct, error: coinProductError } = await supabase.from('coin_products')
+		.select('product_id').eq('product_id', productId).eq('enabled', true).maybeSingle();
+	if (coinProductError && !String(coinProductError.message ?? '').includes('coin_products')) throw coinProductError;
+	if (coinProduct && ['INITIAL_PURCHASE', 'NON_RENEWING_PURCHASE'].includes(eventType)) {
+		const transactionId = String(event.transaction_id ?? event.id ?? '');
+		if (!transactionId) {
+			response.status(400).json({ error: 'Coin purchase event is missing its transaction id.' });
+			return;
+		}
+		const { error: grantError } = await supabase.rpc('grant_coin_purchase', {
+			p_user_id: appUserId,
+			p_product_id: productId,
+			p_provider_transaction_id: transactionId,
+			p_metadata: { event_type: eventType, event_id: String(event.id ?? '') },
+		});
+		if (grantError) throw grantError;
+		response.status(200).json({ received: true, coinPurchase: true });
+		return;
+	}
 	if (!entitlementIds.includes(entitlementId)) {
 		response.status(200).json({ received: true, ignored: true });
 		return;
 	}
 
-	const supabase = getSupabaseAdmin();
 	const { data: prior, error: lookupError } = await supabase.from('subscriptions')
 		.select('id, provider_event_timestamp_ms')
 		.eq('provider', 'revenuecat')
