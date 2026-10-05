@@ -1,4 +1,14 @@
 import * as chaptersService from '../services/chapters.service';
+import { z } from 'zod';
+
+export async function chapterAccess(request: any, response: any) {
+	response.json({ data: await chaptersService.chapterAccess(z.uuid().parse(request.params.id), request.user.id) });
+}
+
+export async function unlockChapter(request: any, response: any) {
+	const { expectedPrice } = z.object({ expectedPrice: z.number().int().positive() }).strict().parse(request.body);
+	response.json({ data: await chaptersService.unlockChapter(z.uuid().parse(request.params.id), request.user.id, expectedPrice) });
+}
 import {
 	createChapterSchema,
 	reorderChaptersSchema,

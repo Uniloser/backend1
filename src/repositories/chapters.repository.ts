@@ -25,12 +25,24 @@ export async function findChapter(chapterId: string) {
 export async function listChapters(storyId: string) {
 	const { data, error } = await getSupabaseAdmin()
 		.from('chapters')
-		.select('*')
+		.select('id, story_id, title, content_type, has_text, has_comic, chapter_order, status, published_at, created_at, updated_at, coin_price')
 		.eq('story_id', storyId)
 		.order('chapter_order', { ascending: true });
 
 	if (error) throw error;
 	return data ?? [];
+}
+
+export async function countPublishedChaptersBefore(storyId: string, chapterOrder: number) {
+	const { count, error } = await getSupabaseAdmin()
+		.from('chapters')
+		.select('id', { count: 'exact', head: true })
+		.eq('story_id', storyId)
+		.eq('status', 'published')
+		.lt('chapter_order', chapterOrder);
+
+	if (error) throw error;
+	return count ?? 0;
 }
 
 export async function createChapter(input: {

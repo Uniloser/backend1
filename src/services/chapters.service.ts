@@ -83,6 +83,43 @@ async function hasActiveSubscription(userId: string) {
 	return Boolean(data?.length);
 }
 
+async function coinUnlocks(userId: string, chapterIds: string[]) {
+	if (!chapterIds.length) return new Set<string>();
+	const { data, error } = await getSupabaseAdmin().from('chapter_coin_unlocks')
+		.select('chapter_id').eq('user_id', userId).in('chapter_id', chapterIds);
+	if (error) throw error;
+	return new Set<string>((data ?? []).map((row: { chapter_id: string }) => row.chapter_id));
+}
+
+export async function chapterAccess(chapterId: string, userId: string) {
+	const chapter = await requireChapter(chapterId);
+	const chapters = await listChapters(chapter.story_id, userId);
+	const metadata = chapters.find(item => item.id === chapterId);
+	if (!metadata || chapter.status !== 'published') throw new ApiError(404, 'Chapter not found');
+	const { data: wallet, error } = await getSupabaseAdmin().from('coin_wallets').select('balance').eq('user_id', userId).maybeSingle();
+	if (error) throw error;
+	return { chapterId, accessible: (metadata as Record<string, unknown>).accessible === true, coinPrice: chapter.coin_price, balance: wallet?.balance ?? 0 };
+}
+
+export async function unlockChapter(chapterId: string, userId: string, expectedPrice: number) {
+	const chapter = await requireChapter(chapterId);
+	await requireReadableStory(chapter.story_id, userId);
+	const { data, error } = await getSupabaseAdmin().rpc('unlock_chapter_with_coins', {
+		p_user_id: userId, p_chapter_id: chapterId, p_expected_price: expectedPrice, p_minimum_free: MINIMUM_FREE_CHAPTERS,
+	});
+	if (error) {
+		const failures: Record<string, [number, string]> = {
+			INSUFFICIENT_COINS: [409, 'You do not have enough Agora Coins.'],
+			COIN_PRICE_CHANGED: [409, 'The chapter price changed. Review the new price and try again.'],
+			CHAPTER_NOT_FOUND: [404, 'Chapter not found'],
+		};
+		const failure = failures[error.message];
+		if (failure) throw new ApiError(failure[0], failure[1], { code: error.message });
+		throw error;
+	}
+	return data;
+}
+
 async function isApprovedCreator(userId: string) {
 	const { data, error } = await getSupabaseAdmin()
 		.from('creator_monetization_profiles')
@@ -97,15 +134,20 @@ async function isApprovedCreator(userId: string) {
 async function requirePremiumChapterAccess(chapter: Record<string, unknown>, userId?: string) {
 	const story = await chaptersRepository.findStoryOwner(chapter.story_id as string);
 	if (!story) throw new ApiError(404, 'Story not found');
-	const published = await chaptersRepository.listChapters(chapter.story_id as string);
-	const publishedChapters = published
-		.filter((item: { status: string }) => item.status === 'published')
-		.sort((a: { chapter_order: number }, b: { chapter_order: number }) => a.chapter_order - b.chapter_order);
-	const chapterIndex = publishedChapters.findIndex((item: { id: string }) => item.id === chapter.id);
+	if (story.author_id === userId || story.access_type !== 'PREMIUM' || story.monetization_enabled !== true) return;
+
+	const chapterOrder = chapter.chapter_order;
+	if (typeof chapterOrder !== 'number') {
+		throw new Error('Chapter order is missing while checking premium access');
+	}
+	const chapterIndex = await chaptersRepository.countPublishedChaptersBefore(
+		chapter.story_id as string,
+		chapterOrder,
+	);
 	const previewCount = Math.max(MINIMUM_FREE_CHAPTERS, story.free_chapter_count ?? MINIMUM_FREE_CHAPTERS);
-	const isPremium = story.access_type === 'PREMIUM' && story.monetization_enabled === true && chapterIndex >= previewCount;
-	if (!isPremium || story.author_id === userId) return;
+	if (chapterIndex < previewCount) return;
 	if (userId && await hasActiveSubscription(userId)) return;
+	if (userId && (await coinUnlocks(userId, [chapter.id as string])).has(chapter.id as string)) return;
 	throw new ApiError(403, 'This chapter is part of ReadAgora+.', {
 		code: 'PREMIUM_CONTENT_REQUIRED', accessible: false, reason: 'PREMIUM_CONTENT_REQUIRED',
 		storyId: chapter.story_id, chapterId: chapter.id, previewEndedAtChapter: previewCount,
@@ -151,16 +193,24 @@ export async function listChapters(storyId: string, userId?: string) {
 		? chapters
 		: chapters.filter((chapter: { status: string }) => chapter.status === 'published');
 
+	const publishedChapters = chapters
+		.filter((chapter: { status: string }) => chapter.status === 'published')
+		.sort((first: { chapter_order: number }, second: { chapter_order: number }) => first.chapter_order - second.chapter_order);
+	const chapterPositions = new Map<string, number>(publishedChapters.map(
+		(chapter: { id: string }, index: number): [string, number] => [chapter.id, index],
+	));
 	const previewCount = Math.max(MINIMUM_FREE_CHAPTERS, story.free_chapter_count ?? MINIMUM_FREE_CHAPTERS);
-	const subscriber = Boolean(userId && await hasActiveSubscription(userId));
+	const isPremiumStory = story.access_type === 'PREMIUM' && story.monetization_enabled === true;
+	const subscriber = Boolean(
+		isPremiumStory && userId && story.author_id !== userId && await hasActiveSubscription(userId),
+	);
+	const unlocked = userId && isPremiumStory ? await coinUnlocks(userId, visible.map((chapter: { id: string }) => chapter.id)) : new Set<string>();
 	return attachPanelMetadata(visible.map((chapter: Record<string, unknown>) => {
-		const index = chapters.filter((item: { status: string }) => item.status === 'published')
-			.sort((a: { chapter_order: number }, b: { chapter_order: number }) => a.chapter_order - b.chapter_order)
-			.findIndex((item: { id: string }) => item.id === chapter.id);
-		const premium = story.access_type === 'PREMIUM' && story.monetization_enabled === true && index >= previewCount;
-		const accessible = !premium || story.author_id === userId || subscriber;
+		const index = chapterPositions.get(chapter.id as string) ?? -1;
+		const premium = isPremiumStory && index >= previewCount;
+		const accessible = !premium || story.author_id === userId || subscriber || unlocked.has(chapter.id as string);
 		const { content: _content, ...metadata } = chapter;
-		return { ...metadata, access_type: premium ? 'PREMIUM' : 'FREE', accessible,
+		return { ...metadata, access_type: premium ? 'PREMIUM' : 'FREE', accessible, coin_unlocked: unlocked.has(chapter.id as string),
 			...(premium && !accessible ? { access_reason: 'PREMIUM_CONTENT_REQUIRED' } : {}) };
 	}));
 }
@@ -171,7 +221,11 @@ export async function getChapter(chapterId: string, userId?: string) {
 
 	if (chapter.status === 'published') {
 		await requirePremiumChapterAccess(chapter, userId);
-		return attachChapterPanels(chapter, userId);
+		const story = await chaptersRepository.findStoryOwner(chapter.story_id);
+		const index = await chaptersRepository.countPublishedChaptersBefore(chapter.story_id, chapter.chapter_order);
+		const premium = story?.access_type === 'PREMIUM' && story.monetization_enabled === true
+			&& index >= Math.max(MINIMUM_FREE_CHAPTERS, story.free_chapter_count ?? MINIMUM_FREE_CHAPTERS);
+		return attachChapterPanels({ ...chapter, access_type: premium ? 'PREMIUM' : 'FREE', accessible: true }, userId);
 	}
 
 	const story = await chaptersRepository.findStoryOwner(chapter.story_id);

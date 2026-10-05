@@ -6,6 +6,8 @@ import * as likesController from '../controllers/likes.controller';
 import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
+router.get('/chapters/:id/access', auth, asyncHandler(chaptersController.chapterAccess));
+router.post('/chapters/:id/unlock', auth, asyncHandler(chaptersController.unlockChapter));
 
 router.get('/chapters/:id/like', optionalAuth, asyncHandler(likesController.chapterLikeStatus));
 router.post('/chapters/:id/like', auth, asyncHandler(likesController.likeChapter));
