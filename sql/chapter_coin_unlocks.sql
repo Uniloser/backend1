@@ -13,7 +13,7 @@ revoke all on public.chapter_coin_unlocks from public, anon, authenticated;
 grant all on public.chapter_coin_unlocks to service_role;
 alter table public.coin_transactions drop constraint if exists coin_transactions_type_check;
 alter table public.coin_transactions add constraint coin_transactions_type_check
-  check (type in ('PURCHASE','SUPPORT_SENT','CHAPTER_UNLOCK','REFUND','ADMIN_GRANT','BONUS','REVERSAL'));
+  check (type in ('PURCHASE','SUPPORT_SENT','SUPPORT_RECEIVED','CHAPTER_UNLOCK','REFUND','ADMIN_GRANT','BONUS','REVERSAL'));
 
 create or replace function public.unlock_chapter_with_coins(
   p_user_id uuid, p_chapter_id uuid, p_expected_price integer, p_minimum_free integer default 3

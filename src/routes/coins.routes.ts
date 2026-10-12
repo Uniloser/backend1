@@ -6,4 +6,5 @@ const router = Router();
 router.get('/coins/wallet', auth, asyncHandler(coinsController.getWallet));
 router.get('/coins/products', auth, asyncHandler(coinsController.listProducts));
 router.get('/coins/history', auth, asyncHandler(coinsController.listHistory));
+router.post('/coins/support', auth, asyncHandler(coinsController.sendSupport));
 export default router;

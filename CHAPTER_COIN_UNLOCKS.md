@@ -12,7 +12,7 @@ Chapter prices are controlled in the database: `chapters.coin_price`, initially 
 
 The database function checks free/author/Premium access before spending, locks the chapter and wallet, and atomically writes the wallet debit, permanent ownership and `CHAPTER_UNLOCK` ledger entry. The unique user/chapter key and locked recheck make retries idempotent. Unavailable chapters, changed prices and insufficient balances do not charge coins. Direct client grants, debits and premium story content reads are restricted; the backend remains the access authority. Premium chapter bodies are excluded from the shared frontend chapter cache.
 
-This change keeps `SUPPORT_SENT` and writer-support records separate. It does not introduce a tipping endpoint or a creator cash-conversion rate.
+Agora Coin support is handled separately from chapter unlocks. The writer tipping endpoint credits the writer's Agora Coin wallet directly; it does not create cash earnings or enable withdrawals.
 
 ## Validation
 

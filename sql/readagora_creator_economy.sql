@@ -75,7 +75,7 @@ create table if not exists public.coin_products (
 create table if not exists public.coin_transactions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.users(id) on delete cascade,
-  type text not null check (type in ('PURCHASE','SUPPORT_SENT','REFUND','ADMIN_GRANT','BONUS','REVERSAL')),
+  type text not null check (type in ('PURCHASE','SUPPORT_SENT','SUPPORT_RECEIVED','CHAPTER_UNLOCK','REFUND','ADMIN_GRANT','BONUS','REVERSAL')),
   amount bigint not null check (amount <> 0),
   balance_after bigint not null check (balance_after >= 0),
   provider text,
@@ -84,6 +84,9 @@ create table if not exists public.coin_transactions (
   metadata jsonb not null default '{}',
   created_at timestamptz not null default now()
 );
+alter table public.coin_transactions drop constraint if exists coin_transactions_type_check;
+alter table public.coin_transactions add constraint coin_transactions_type_check
+  check (type in ('PURCHASE','SUPPORT_SENT','SUPPORT_RECEIVED','CHAPTER_UNLOCK','REFUND','ADMIN_GRANT','BONUS','REVERSAL'));
 create unique index if not exists coin_transactions_provider_transaction_uidx
   on public.coin_transactions(provider, provider_transaction_id) where provider_transaction_id is not null;
 create index if not exists coin_transactions_user_created_idx on public.coin_transactions(user_id, created_at desc);
@@ -116,6 +119,48 @@ begin
 end; $$;
 revoke all on function public.grant_coin_purchase(uuid,text,text,jsonb) from public, anon, authenticated;
 grant execute on function public.grant_coin_purchase(uuid,text,text,jsonb) to service_role;
+
+-- Readers can send coins to a published story's author. The wallet debit,
+-- support event and linked transaction records commit as one unit.
+create or replace function public.send_coin_support(
+  p_reader_id uuid, p_story_id uuid, p_coins bigint
+) returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  s public.stories;
+  w public.coin_wallets;
+  support_id uuid;
+begin
+  if p_coins is null or p_coins < 1 or p_coins > 800 then raise exception 'INVALID_SUPPORT_AMOUNT'; end if;
+  select * into s from public.stories where id = p_story_id and status = 'published' for share;
+  if not found then raise exception 'STORY_NOT_FOUND'; end if;
+  if s.author_id = p_reader_id then raise exception 'SELF_SUPPORT_NOT_ALLOWED'; end if;
+
+  insert into public.coin_wallets(user_id) values(p_reader_id) on conflict (user_id) do nothing;
+  select * into w from public.coin_wallets where user_id = p_reader_id for update;
+  if w.balance < p_coins then raise exception 'INSUFFICIENT_COINS'; end if;
+
+  update public.coin_wallets set balance = balance - p_coins,
+    lifetime_spent = lifetime_spent + p_coins, updated_at = now()
+    where user_id = p_reader_id returning * into w;
+
+  insert into public.coin_support_events(reader_id,writer_id,coins)
+    values(p_reader_id,s.author_id,p_coins) returning id into support_id;
+  insert into public.coin_transactions(user_id,type,amount,balance_after,source_id,metadata)
+    values(p_reader_id,'SUPPORT_SENT',-p_coins,w.balance,support_id::text,
+      jsonb_build_object('story_id',p_story_id,'writer_id',s.author_id));
+
+  insert into public.coin_wallets(user_id) values(s.author_id) on conflict (user_id) do nothing;
+  update public.coin_wallets set balance = balance + p_coins, updated_at = now()
+    where user_id = s.author_id;
+  insert into public.coin_transactions(user_id,type,amount,balance_after,source_id,metadata)
+    select s.author_id,'SUPPORT_RECEIVED',p_coins,balance,support_id::text,
+      jsonb_build_object('story_id',p_story_id,'reader_id',p_reader_id)
+    from public.coin_wallets where user_id = s.author_id;
+
+  return jsonb_build_object('supportId',support_id,'coins',p_coins,'balance',w.balance);
+end; $$;
+revoke all on function public.send_coin_support(uuid,uuid,bigint) from public, anon, authenticated;
+grant execute on function public.send_coin_support(uuid,uuid,bigint) to service_role;
 
 alter table public.creator_wallets enable row level security;
 alter table public.creator_earnings_ledger enable row level security;
