@@ -21,6 +21,36 @@ export async function getWallet(userId: string) {
 	return data ?? { pending_balance: 0, available_balance: 0, lifetime_earnings: 0, lifetime_paid: 0, currency: 'ZAR' };
 }
 
+export async function getCashWallet(userId: string) {
+	const { data, error } = await db().from('creator_cash_accounts')
+		.select('pending_usd_cents, available_usd_cents, reserved_usd_cents, lifetime_earned_usd_cents, lifetime_paid_usd_cents')
+		.eq('writer_id', userId).maybeSingle();
+	if (error) throw error;
+	return data ?? { pending_usd_cents: 0, available_usd_cents: 0, reserved_usd_cents: 0, lifetime_earned_usd_cents: 0, lifetime_paid_usd_cents: 0 };
+}
+
+export async function getCashoutQuote(userId: string) {
+	const { data, error } = await db().rpc('get_creator_cashout_quote', { p_writer_id: userId });
+	if (error) throw error;
+	return data;
+}
+
+export async function listCashTransactions(userId: string, limit: number) {
+	const { data, error } = await db().from('creator_cash_journals')
+		.select('id, kind, source_id, coins, eligible_net_usd_cents, creator_share_bps, creator_usd_cents, platform_usd_cents, created_at, metadata')
+		.eq('writer_id', userId).order('created_at', { ascending: false }).limit(limit);
+	if (error) throw error;
+	return data ?? [];
+}
+
+export async function listPayoutHistory(userId: string, limit: number) {
+	const { data, error } = await db().from('creator_payout_requests')
+		.select('id, amount_usd_cents, amount_zmw_minor_units, fee_zmw_minor_units, exchange_rate_usd_zmw_micros, payout_method, status, approved_at, paid_at, created_at')
+		.eq('writer_id', userId).order('created_at', { ascending: false }).limit(limit);
+	if (error) throw error;
+	return data ?? [];
+}
+
 export async function listTransactions(userId: string, limit: number) {
 	const { data, error } = await db().from('creator_earnings_ledger').select('id, source_type, amount, currency, status, description, created_at').eq('writer_id', userId).order('created_at', { ascending: false }).limit(limit);
 	if (error) throw error;

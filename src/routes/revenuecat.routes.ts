@@ -25,6 +25,20 @@ function mapPlan(productId: string) {
 	return 'READAGORA_PLUS_WEEKLY';
 }
 
+function eligiblePurchaseNetUsdCents(event: Record<string, unknown>) {
+	const grossUsd = Number(event.price);
+	const commission = Number(event.commission_percentage);
+	const tax = Number(event.tax_percentage);
+	if (!Number.isFinite(grossUsd) || grossUsd <= 0 || !Number.isFinite(commission) || !Number.isFinite(tax)) return 0;
+	const asRate = (value: number) => value > 1 ? value / 100 : value;
+	const commissionBps = Math.round(asRate(commission) * 10_000);
+	const taxBps = Math.round(asRate(tax) * 10_000);
+	const totalBps = commissionBps + taxBps;
+	if (commissionBps < 0 || taxBps < 0 || totalBps > 10_000) return 0;
+	const grossCents = Math.round(grossUsd * 100);
+	return Math.max(0, Math.floor(grossCents * (10_000 - totalBps) / 10_000));
+}
+
 router.post('/webhooks/revenuecat', asyncHandler(async (request: any, response: any) => {
 	if (!env.revenueCatWebhookAuthToken) {
 		response.status(503).json({ error: 'RevenueCat webhook is not configured.' });
@@ -65,10 +79,33 @@ router.post('/webhooks/revenuecat', asyncHandler(async (request: any, response: 
 			p_user_id: appUserId,
 			p_product_id: productId,
 			p_provider_transaction_id: transactionId,
-			p_metadata: { event_type: eventType, event_id: String(event.id ?? '') },
+			p_metadata: {
+				event_type: eventType,
+				event_id: String(event.id ?? ''),
+				purchase_currency: typeof event.currency === 'string' ? event.currency.toUpperCase() : null,
+				eligible_net_usd_cents: eligiblePurchaseNetUsdCents(event),
+				pricing_source: 'revenuecat_webhook_price_usd_after_reported_tax_and_commission',
+			},
 		});
 		if (grantError) throw grantError;
 		response.status(200).json({ received: true, coinPurchase: true });
+		return;
+	}
+	if (coinProduct && eventType === 'REFUND') {
+		const transactionId = String(event.transaction_id ?? event.original_transaction_id ?? '');
+		const refundEventId = String(event.id ?? '');
+		if (!transactionId || !refundEventId) {
+			response.status(400).json({ error: 'Coin refund event is missing stable transaction identifiers.' });
+			return;
+		}
+		const { data, error: refundError } = await supabase.rpc('reverse_coin_purchase', {
+			p_user_id: appUserId,
+			p_store_transaction_id: transactionId,
+			p_refund_event_id: refundEventId,
+			p_metadata: { event_type: eventType, event_timestamp_ms: eventTimestamp },
+		});
+		if (refundError) throw refundError;
+		response.status(200).json({ received: true, coinRefund: true, requiresReconciliation: data?.requiresReconciliation ?? false });
 		return;
 	}
 	if (!entitlementIds.includes(entitlementId)) {

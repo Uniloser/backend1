@@ -21,9 +21,9 @@ export async function listHistory(userId: string, limit: number) {
 	return data ?? [];
 }
 
-export async function sendSupport(readerId: string, storyId: string, coins: number) {
+export async function sendSupport(readerId: string, storyId: string, coins: number, idempotencyKey: string) {
 	const { data, error } = await getSupabaseAdmin().rpc('send_coin_support', {
-		p_reader_id: readerId, p_story_id: storyId, p_coins: coins,
+		p_reader_id: readerId, p_story_id: storyId, p_coins: coins, p_idempotency_key: idempotencyKey,
 	});
 	if (error) {
 		const failures: Record<string, [number, string]> = {
@@ -31,13 +31,14 @@ export async function sendSupport(readerId: string, storyId: string, coins: numb
 			STORY_NOT_FOUND: [404, 'This story is no longer available for support.'],
 			SELF_SUPPORT_NOT_ALLOWED: [400, 'You cannot send coins to your own story.'],
 			INSUFFICIENT_COINS: [409, 'You do not have enough Agora Coins.'],
+			COIN_SUPPORT_IDEMPOTENCY_MISMATCH: [409, 'This support request key was already used for a different gift.'],
 		};
 		const failure = failures[error.message];
 		if (failure) throw new ApiError(failure[0], failure[1], { code: error.message });
 		throw error;
 	}
-	const result = data as { supportId: string; coins: number; balance: number; writerId: string; storyTitle: string };
-	void usersRepository.findById(readerId)
+	const result = data as { supportId: string; coins: number; balance: number; writerId: string; storyTitle: string; duplicate?: boolean };
+	if (!result.duplicate) void usersRepository.findById(readerId)
 		.then(actor => notificationsService.notifyCoinSupport(result.writerId, readerId, storyId, result.storyTitle, coins, actor?.display_name ?? actor?.username ?? undefined))
 		.catch(error => console.error('coin_support notification failed', error));
 	return result;
