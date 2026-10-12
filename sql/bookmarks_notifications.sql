@@ -29,7 +29,7 @@ create table if not exists public.notifications (
   recipient_id uuid not null references public.users(id) on delete cascade,
   actor_id uuid references public.users(id) on delete set null,
   notification_type text not null check (notification_type in (
-    'new_follower', 'story_published', 'chapter_published', 'comment', 'like', 'system'
+    'new_follower', 'story_published', 'chapter_published', 'comment', 'like', 'coin_support', 'system'
   )),
   story_id uuid references public.stories(id) on delete cascade,
   chapter_id uuid references public.chapters(id) on delete cascade,
@@ -40,6 +40,9 @@ create table if not exists public.notifications (
   read_at timestamptz,
   created_at timestamptz not null default now()
 );
+alter table public.notifications drop constraint if exists notifications_notification_type_check;
+alter table public.notifications add constraint notifications_notification_type_check
+  check (notification_type in ('new_follower','story_published','chapter_published','comment','like','coin_support','system'));
 
 create index if not exists idx_notifications_recipient on public.notifications(recipient_id, created_at desc);
 create index if not exists idx_notifications_unread on public.notifications(recipient_id, created_at desc)

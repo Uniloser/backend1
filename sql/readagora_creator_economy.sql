@@ -2,6 +2,7 @@
 -- Apply after readagora_premium_access.sql and the base wallet schema.
 begin;
 
+
 create table if not exists public.creator_wallets (
   writer_id uuid primary key references public.users(id) on delete cascade,
   pending_balance numeric(14,2) not null default 0 check (pending_balance >= 0),
@@ -129,6 +130,7 @@ declare
   s public.stories;
   w public.coin_wallets;
   support_id uuid;
+  writer_balance bigint;
 begin
   if p_coins is null or p_coins < 1 or p_coins > 800 then raise exception 'INVALID_SUPPORT_AMOUNT'; end if;
   select * into s from public.stories where id = p_story_id and status = 'published' for share;
@@ -151,13 +153,12 @@ begin
 
   insert into public.coin_wallets(user_id) values(s.author_id) on conflict (user_id) do nothing;
   update public.coin_wallets set balance = balance + p_coins, updated_at = now()
-    where user_id = s.author_id;
+    where user_id = s.author_id returning balance into writer_balance;
   insert into public.coin_transactions(user_id,type,amount,balance_after,source_id,metadata)
-    select s.author_id,'SUPPORT_RECEIVED',p_coins,balance,support_id::text,
-      jsonb_build_object('story_id',p_story_id,'reader_id',p_reader_id)
-    from public.coin_wallets where user_id = s.author_id;
+    values(s.author_id,'SUPPORT_RECEIVED',p_coins,writer_balance,support_id::text,
+      jsonb_build_object('story_id',p_story_id,'reader_id',p_reader_id));
 
-  return jsonb_build_object('supportId',support_id,'coins',p_coins,'balance',w.balance);
+  return jsonb_build_object('supportId',support_id,'coins',p_coins,'balance',w.balance,'writerId',s.author_id,'storyTitle',s.title);
 end; $$;
 revoke all on function public.send_coin_support(uuid,uuid,bigint) from public, anon, authenticated;
 grant execute on function public.send_coin_support(uuid,uuid,bigint) to service_role;

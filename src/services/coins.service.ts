@@ -1,5 +1,7 @@
 import { getSupabaseAdmin } from '../config/supabase';
 import { ApiError } from '../utils/ApiError';
+import * as notificationsService from './notifications.service';
+import * as usersRepository from '../repositories/users.repository';
 
 export async function getWallet(userId: string) {
 	const { data, error } = await getSupabaseAdmin().from('coin_wallets').select('balance, lifetime_purchased, lifetime_spent').eq('user_id', userId).maybeSingle();
@@ -34,5 +36,9 @@ export async function sendSupport(readerId: string, storyId: string, coins: numb
 		if (failure) throw new ApiError(failure[0], failure[1], { code: error.message });
 		throw error;
 	}
-	return data as { supportId: string; coins: number; balance: number };
+	const result = data as { supportId: string; coins: number; balance: number; writerId: string; storyTitle: string };
+	void usersRepository.findById(readerId)
+		.then(actor => notificationsService.notifyCoinSupport(result.writerId, readerId, storyId, result.storyTitle, coins, actor?.display_name ?? actor?.username ?? undefined))
+		.catch(error => console.error('coin_support notification failed', error));
+	return result;
 }

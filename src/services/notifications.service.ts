@@ -72,6 +72,19 @@ export function notifyLike(recipientId: string, actorId: string, storyId: string
 	});
 }
 
+export function notifyCoinSupport(recipientId: string, actorId: string, storyId: string, storyTitle: string, coins: number, actorName?: string) {
+	const sender = actorName?.trim() || 'A reader';
+	return createNotification({
+		recipient_id: recipientId,
+		actor_id: actorId,
+		notification_type: 'coin_support',
+		title: 'You received a story gift',
+		body: `${sender} sent you ${coins} Agora Coins for “${storyTitle}”.`,
+		story_id: storyId,
+		data: { story_id: storyId, coins },
+	});
+}
+
 export function notifyComment(
 	recipientId: string,
 	actorId: string,
