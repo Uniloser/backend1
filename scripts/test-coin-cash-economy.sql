@@ -25,6 +25,7 @@ grant usage on schema public,auth to anon,authenticated;
 grant select on chapters,comic_panels,speech_bubbles to anon,authenticated;
 \ir ../sql/chapter_coin_unlocks.sql
 \ir ../sql/readagora_coin_cash_economy.sql
+\ir ../sql/creator_payout_workflow.sql
 
 insert into public.users(id) values
  ('00000000-0000-4000-8000-000000000001'),('00000000-0000-4000-8000-000000000002'),('00000000-0000-4000-8000-000000000003');
@@ -82,6 +83,89 @@ begin
     (select coalesce(sum(credit_usd_cents),0) from creator_cash_ledger_entries e where e.journal_id=j.id)), 'double-entry journal is unbalanced';
   assert not has_function_privilege('authenticated','public.send_coin_support(uuid,uuid,bigint,uuid)','execute'), 'client can invoke support RPC directly';
   assert not has_function_privilege('authenticated','public.reverse_coin_purchase(uuid,text,text,jsonb)','execute'), 'client can reverse purchases directly';
+
+  update public.creator_cash_accounts set available_usd_cents=3000
+    where writer_id='00000000-0000-4000-8000-000000000002';
+  update public.creator_cashout_policy set enabled=true, payout_processing_enabled=true,
+    provider_name='manual-test-provider', fx_usd_zmw_micros=20000000,
+    supported_methods=array['MOBILE_MONEY'], fee_bps=0
+    where singleton;
+  result := public.fund_creator_payout_reserve(
+    '00000000-0000-4000-8000-000000000003', 30000, 'test-funding-1', 'Fixture funding',
+    '30000000-0000-4000-8000-000000000010'
+  );
+  assert (result->>'availableMinorUnits')::bigint=30000, 'reserve funding failed';
+  result := public.fund_creator_payout_reserve(
+    '00000000-0000-4000-8000-000000000003', 30000, 'test-funding-1', 'Fixture funding',
+    '30000000-0000-4000-8000-000000000010'
+  );
+  assert (result->>'duplicate')::boolean, 'reserve funding retry was not idempotent';
+
+  result := public.request_creator_payout(
+    '00000000-0000-4000-8000-000000000002', 10000, 'MOBILE_MONEY', '+260971234567',
+    '30000000-0000-4000-8000-000000000011'
+  );
+  assert result->>'status'='REQUESTED' and result->>'destinationHint'='*********4567', 'payout request failed or exposed destination';
+  assert (select available_usd_cents from creator_cash_accounts where writer_id='00000000-0000-4000-8000-000000000002')=2500, 'request did not reserve creator funds';
+  result := public.request_creator_payout(
+    '00000000-0000-4000-8000-000000000002', 10000, 'MOBILE_MONEY', '+260971234567',
+    '30000000-0000-4000-8000-000000000011'
+  );
+  assert (result->>'duplicate')::boolean, 'payout request retry was not idempotent';
+  result := public.review_creator_payout((result->>'id')::uuid,'00000000-0000-4000-8000-000000000003','reject','Reject fixture request');
+  assert result->>'status'='REJECTED', 'payout rejection failed';
+  assert (select available_usd_cents from creator_cash_accounts where writer_id='00000000-0000-4000-8000-000000000002')=3000
+    and (select reserved_usd_cents from creator_cash_accounts where writer_id='00000000-0000-4000-8000-000000000002')=0,
+    'rejected payout did not release creator funds exactly once';
+
+  result := public.request_creator_payout(
+    '00000000-0000-4000-8000-000000000002', 10000, 'MOBILE_MONEY', '+260971234567',
+    '30000000-0000-4000-8000-000000000012'
+  );
+  result := public.review_creator_payout((result->>'id')::uuid,'00000000-0000-4000-8000-000000000003','approve','Approve fixture request');
+  assert result->>'status'='APPROVED' and result->>'reserveState'='HELD', 'payout approval did not hold reserve';
+  assert (select available_minor_units from creator_payout_reserve where singleton)=20000
+    and (select held_minor_units from creator_payout_reserve where singleton)=10000,
+    'reserve hold was not atomic';
+  result := public.start_creator_payout_transfer((result->>'id')::uuid,'00000000-0000-4000-8000-000000000003');
+  assert result->>'status'='PROCESSING', 'manual transfer start failed';
+  result := public.reconcile_creator_payout((result->>'id')::uuid,'00000000-0000-4000-8000-000000000003','uncertain',null,'Check transfer outcome');
+  assert result->>'status'='PROCESSING' and result->>'paymentOutcome'='UNCERTAIN', 'uncertain payment was not held for reconciliation';
+  result := public.reconcile_creator_payout((result->>'id')::uuid,'00000000-0000-4000-8000-000000000003','paid','manual-ref-2','Transfer confirmed');
+  assert result->>'status'='PAID' and result->>'reserveState'='PAID', 'confirmed payout was not completed';
+  assert (select lifetime_paid_usd_cents from creator_cash_accounts where writer_id='00000000-0000-4000-8000-000000000002')=500
+    and (select reserved_usd_cents from creator_cash_accounts where writer_id='00000000-0000-4000-8000-000000000002')=0,
+    'confirmed payout did not update creator liability';
+  assert (select held_minor_units from creator_payout_reserve where singleton)=0, 'paid payout left reserve funds held';
+
+  result := public.request_creator_payout(
+    '00000000-0000-4000-8000-000000000002', 10000, 'MOBILE_MONEY', '+260971234567',
+    '30000000-0000-4000-8000-000000000013'
+  );
+  result := public.review_creator_payout((result->>'id')::uuid,'00000000-0000-4000-8000-000000000003','approve','Approve failed fixture request');
+  result := public.start_creator_payout_transfer((result->>'id')::uuid,'00000000-0000-4000-8000-000000000003');
+  result := public.reconcile_creator_payout((result->>'id')::uuid,'00000000-0000-4000-8000-000000000003','failed',null,'Transfer confirmed not sent');
+  assert result->>'status'='FAILED' and result->>'reserveState'='RELEASED', 'failed payout did not enter recovery state';
+  assert (select available_usd_cents from creator_cash_accounts where writer_id='00000000-0000-4000-8000-000000000002')=2500
+    and (select reserved_usd_cents from creator_cash_accounts where writer_id='00000000-0000-4000-8000-000000000002')=0,
+    'failed payout did not release creator funds exactly once';
+  assert (select available_minor_units from creator_payout_reserve where singleton)=20000
+    and (select held_minor_units from creator_payout_reserve where singleton)=0,
+    'failed payout did not release held reserve';
+
+  result := public.request_creator_payout(
+    '00000000-0000-4000-8000-000000000002', 25000, 'MOBILE_MONEY', '+260971234567',
+    '30000000-0000-4000-8000-000000000014'
+  );
+  result := public.review_creator_payout((result->>'id')::uuid,'00000000-0000-4000-8000-000000000003','approve','Approve pending reserve fixture');
+  assert result->>'status'='APPROVED' and result->>'reserveState'='AWAITING_RESERVE'
+    and result->>'reason'='PAYOUT_RESERVE_INSUFFICIENT', 'insufficient reserve did not retain request unpaid';
+  assert (select held_minor_units from creator_payout_reserve where singleton)=0,
+    'insufficient reserve created a partial cash hold';
+  assert (select reserved_usd_cents from creator_cash_accounts where writer_id='00000000-0000-4000-8000-000000000002')=1250,
+    'approved unpaid request failed to retain reserved creator liability';
+  assert not has_function_privilege('authenticated','public.request_creator_payout(uuid,bigint,text,text,uuid)','execute'),
+    'client can invoke payout RPC directly';
 end $$;
 
 select 'Agora coin cash economy assertions passed' as result;

@@ -45,10 +45,129 @@ export async function listCashTransactions(userId: string, limit: number) {
 
 export async function listPayoutHistory(userId: string, limit: number) {
 	const { data, error } = await db().from('creator_payout_requests')
-		.select('id, amount_usd_cents, amount_zmw_minor_units, fee_zmw_minor_units, exchange_rate_usd_zmw_micros, payout_method, status, approved_at, paid_at, created_at')
+		.select('id, amount_usd_cents, amount_zmw_minor_units, fee_zmw_minor_units, exchange_rate_usd_zmw_micros, payout_method, status, reserve_state, payment_outcome, destination_hint, review_note, failure_note, approved_at, paid_at, created_at')
 		.eq('writer_id', userId).order('created_at', { ascending: false }).limit(limit);
 	if (error) throw error;
 	return data ?? [];
+}
+
+const payoutErrors: Record<string, [number, string]> = {
+	PAYOUT_IDEMPOTENCY_KEY_REQUIRED: [400, 'A request key is required. Please try again.'],
+	INVALID_PAYOUT_AMOUNT: [400, 'Enter a valid payout amount.'],
+	INVALID_PAYOUT_DESTINATION: [400, 'Enter valid payout destination details.'],
+	PAYOUT_IDEMPOTENCY_MISMATCH: [409, 'This request key was already used for different payout details.'],
+	PAYOUTS_DISABLED: [409, 'Withdrawals are not currently enabled. Your earnings remain in your creator account.'],
+	PAYOUT_BELOW_MINIMUM: [400, 'The payout amount is below the current minimum.'],
+	PAYOUT_METHOD_UNAVAILABLE: [400, 'That payout method is not currently supported.'],
+	PAYOUT_FX_UNAVAILABLE: [409, 'The payout exchange rate is not configured.'],
+	INSUFFICIENT_AVAILABLE_EARNINGS: [409, 'Available creator earnings are not enough for this payout.'],
+	INVALID_PAYOUT_DECISION: [400, 'Choose approve or reject.'],
+	PAYOUT_REVIEW_NOTE_REQUIRED: [400, 'Add a short review note.'],
+	PAYOUT_NOT_FOUND: [404, 'Payout request not found.'],
+	PAYOUT_SELF_APPROVAL_FORBIDDEN: [403, 'You cannot review your own payout request.'],
+	PAYOUT_NOT_REVIEWABLE: [409, 'This payout request is no longer available for review.'],
+	PAYOUT_ACCOUNT_RESERVATION_MISMATCH: [409, 'The creator account reservation needs reconciliation.'],
+	PAYOUT_RESERVE_INSUFFICIENT: [409, 'The cash payout reserve is insufficient. The request remains approved and unpaid until reserve funds are available.'],
+	INVALID_RESERVE_FUNDING_AMOUNT: [400, 'Enter a positive reserve funding amount.'],
+	RESERVE_IDEMPOTENCY_KEY_REQUIRED: [400, 'A reserve funding request key is required.'],
+	RESERVE_FUNDING_REFERENCE_REQUIRED: [400, 'Enter the funding reference.'],
+	RESERVE_IDEMPOTENCY_MISMATCH: [409, 'This reserve request key was already used for different details.'],
+	PAYOUT_NOT_READY_FOR_TRANSFER: [409, 'This payout is not approved with reserve funds held.'],
+	INVALID_PAYOUT_OUTCOME: [400, 'Choose uncertain, paid, or failed.'],
+	PAYOUT_RECONCILIATION_NOTE_REQUIRED: [400, 'Add a reconciliation note.'],
+	PAYMENT_REFERENCE_REQUIRED: [400, 'Enter the confirmed transfer reference before marking the payout paid.'],
+	PAYOUT_NOT_RECONCILABLE: [409, 'This payout cannot be reconciled from its current state.'],
+	PAYOUT_RESERVE_HOLD_MISMATCH: [409, 'The cash reserve hold needs reconciliation.'],
+};
+
+async function callPayoutRpc<T>(name: string, args: Record<string, unknown>): Promise<T> {
+	const { data, error } = await db().rpc(name, args);
+	if (error) {
+		const failure = payoutErrors[error.message];
+		if (failure) throw new ApiError(failure[0], failure[1], { code: error.message });
+		throw error;
+	}
+	return data as T;
+}
+
+export async function requestPayout(
+	writerId: string,
+	amountZmwMinorUnits: number,
+	payoutMethod: string,
+	destinationReference: string,
+	idempotencyKey: string,
+) {
+	return callPayoutRpc('request_creator_payout', {
+		p_writer_id: writerId,
+		p_amount_zmw_minor_units: amountZmwMinorUnits,
+		p_payout_method: payoutMethod,
+		p_destination_reference: destinationReference,
+		p_idempotency_key: idempotencyKey,
+	});
+}
+
+export async function listAdminPayouts(limit: number) {
+	const { data, error } = await db().from('creator_payout_requests')
+		.select('id, writer_id, amount_usd_cents, amount_zmw_minor_units, fee_zmw_minor_units, exchange_rate_usd_zmw_micros, payout_method, destination_reference, destination_hint, status, reserve_state, payment_outcome, provider_reference, review_note, failure_note, reviewed_by, approved_at, paid_at, created_at, updated_at')
+		.order('created_at', { ascending: true }).limit(limit);
+	if (error) throw error;
+	return data ?? [];
+}
+
+export async function getPayoutReserve() {
+	const admin = db();
+	const monthStart = new Date();
+	monthStart.setUTCDate(1);
+	monthStart.setUTCHours(0, 0, 0, 0);
+	const [reserve, paid, movements] = await Promise.all([
+		admin.from('creator_payout_reserve').select('currency, monthly_target_minor_units, available_minor_units, held_minor_units, updated_at').eq('singleton', true).single(),
+		admin.from('creator_payout_reserve_movements').select('amount_zmw_minor_units').eq('kind', 'PAYOUT_PAID').gte('created_at', monthStart.toISOString()),
+		admin.from('creator_payout_reserve_movements').select('id, kind, amount_zmw_minor_units, available_delta_minor_units, held_delta_minor_units, payout_request_id, reference, note, actor_id, created_at').order('created_at', { ascending: false }).limit(50),
+	]);
+	for (const result of [reserve, paid, movements]) if (result.error) throw result.error;
+	return {
+		...reserve.data,
+		paidThisMonthMinorUnits: (paid.data ?? []).reduce((total: number, movement: { amount_zmw_minor_units: number }) => total + movement.amount_zmw_minor_units, 0),
+		movements: movements.data ?? [],
+	};
+}
+
+export async function reviewPayout(payoutRequestId: string, actorId: string, decision: 'approve' | 'reject', note: string) {
+	return callPayoutRpc('review_creator_payout', {
+		p_payout_request_id: payoutRequestId, p_actor_id: actorId, p_decision: decision, p_note: note,
+	});
+}
+
+export async function fundPayoutReserve(actorId: string, amountZmwMinorUnits: number, reference: string, note: string, idempotencyKey: string) {
+	return callPayoutRpc('fund_creator_payout_reserve', {
+		p_actor_id: actorId,
+		p_amount_zmw_minor_units: amountZmwMinorUnits,
+		p_reference: reference,
+		p_note: note,
+		p_idempotency_key: idempotencyKey,
+	});
+}
+
+export async function startPayoutTransfer(payoutRequestId: string, actorId: string) {
+	return callPayoutRpc('start_creator_payout_transfer', {
+		p_payout_request_id: payoutRequestId, p_actor_id: actorId,
+	});
+}
+
+export async function reconcilePayout(
+	payoutRequestId: string,
+	actorId: string,
+	outcome: 'uncertain' | 'paid' | 'failed',
+	providerReference: string | null,
+	note: string,
+) {
+	return callPayoutRpc('reconcile_creator_payout', {
+		p_payout_request_id: payoutRequestId,
+		p_actor_id: actorId,
+		p_outcome: outcome,
+		p_provider_reference: providerReference,
+		p_note: note,
+	});
 }
 
 export async function listTransactions(userId: string, limit: number) {
