@@ -12,9 +12,9 @@ Cash journals use USD cents and balanced debit/credit entries. The ledger preser
 
 ## Current cash-out status
 
-Cash-out is disabled by default. The migration stores a proposed K100 minimum, monthly cadence, 7–14 business-day target, fees, FX rate and payout methods as policy data, but no payout provider or FX source has been verified/configured. No withdrawal can be requested or marked paid through this implementation. RevenueCat purchase or refund webhooks never count as proof of a payout. Pending creator earnings remain in USD cents until an approved release/reconciliation process is added.
+Cash-out is disabled by default. The migration stores a proposed K100 minimum, monthly cadence, 7–14 business-day target, fees, FX rate and payout methods as policy data. A local ADMIN control records a manually sourced current bank/provider quote and its server-observed timestamp; no FX feed or transfer provider is integrated. Creator requests are accepted only while policy flags, quote source/rate, methods, and fee policy are configured. RevenueCat purchase or refund webhooks never count as proof of a payout.
 
-Before enabling cash-out, ReadAgora must choose a provider that supports Zambia, verify creator identity and destination ownership, set current USD/ZMW FX data with an observed timestamp, configure fee responsibility and supported methods, and implement approval, reserve, release, provider confirmation, failure and reversal workflows. Do not turn the policy flag on until those controls and the payout request API are implemented and reviewed.
+Before enabling cash-out, an administrator must verify the current quote directly with a provider that supports Zambia, record its source, choose supported manual methods, verify creator identity and destination ownership for each request, and ensure the actual reserve has funds. ReadAgora covers transfer fees. Approvals and payments are separate: approval reserves actual ZMW cash, and only operator-confirmed transfer reconciliation marks a request paid.
 
 ## Routes
 
@@ -40,7 +40,7 @@ Current table-level permissions keep the financial tables private to service rol
 
 ## Manual payout workflow
 
-The additive migration `sql/creator_payout_workflow.sql` implements the missing manual request and reconciliation workflow. Apply it after `readagora_coin_cash_economy.sql`; it does not change the existing purchase, tip, or chapter-unlock accounting. The proposed monthly ZMW 2,000 reserve target is policy metadata only. Actual reserve funding must be separately recorded through an admin operation; the target is not treated as cash or creator earnings.
+The additive migration `sql/creator_payout_workflow.sql` implements manual requests, policy configuration, identity attestations, and reconciliation. Apply it after `readagora_coin_cash_economy.sql`; it does not change the existing purchase, tip, or chapter-unlock accounting. The proposed monthly ZMW 2,000 reserve target is policy metadata only. Actual reserve funding must be separately recorded through an admin operation; the target is not treated as cash or creator earnings.
 
 Creator endpoints:
 
@@ -52,10 +52,10 @@ Admin endpoints require `app_metadata.role = 'admin'` on the authenticated Supab
 - `GET /admin/creator-payouts` lists historical and outstanding requests; destination details are available only to admins.
 - `GET /admin/creator-payout-reserve` returns the target, actual available/held reserve, current-month paid total, and recent movements.
 - `POST /admin/creator-payout-reserve/fund` records separately funded reserve cash with an idempotency key and reference.
-- `POST /admin/creator-payouts/:id/review` approves or rejects with a required audit note. If reserve funds are insufficient, approval remains unpaid in `AWAITING_RESERVE` and can be retried after separately funding the reserve.
+- `POST /admin/creator-payouts/:id/review` approves or rejects with a required audit note. Approval requires an explicit administrator attestation that identity and destination ownership were manually verified. If reserve funds are insufficient, approval remains unpaid in `AWAITING_RESERVE` and can be retried after separately funding the reserve.
 - `POST /admin/creator-payouts/:id/start-transfer` marks the start of a manual transfer, never as paid.
 - `POST /admin/creator-payouts/:id/reconcile` accepts `uncertain`, `paid`, or `failed`. A confirmed payment requires a transfer reference. Uncertain and failed outcomes do not claim payment; failure releases both creator funds and the held reserve exactly once.
 
 Every request reserves creator USD earnings immediately. Approval also moves the requested ZMW amount from actual available reserve to held reserve. Rejection releases the creator reservation. Confirmed payment removes the creator liability and held reserve. Reserve and creator-account updates are locked and transactional. Full payout destination details are protected by service-role-only database access; creator responses include only the last four characters.
 
-Payout processing remains disabled by default. The request RPC refuses requests unless the provider, positive FX rate, supported methods, and explicit processing enablement are configured. Non-zero payout fees also keep the quote disabled until fee treatment is implemented and approved; no fee is silently assumed. The mobile app shows a request form only when the backend-authoritative quote reports enabled. This migration does not add a provider integration or a separate administration UI; use the admin API through an authorized internal client until such a UI is built. Do not enable real payouts until identity verification, fees, reserve funding controls, and production migration review are complete.
+Payout processing remains disabled by default. In the Creator payouts page, a verified administrator can select MTN and/or Airtel, record the current USD/ZMW rate and provider quote source, and explicitly enable or disable new requests. Saving configuration timestamps the quote on the database server and writes a policy audit record. The request RPC refuses requests unless the provider label, positive rate, quote source/timestamp, supported methods, and explicit processing enablement are configured. Non-zero fees keep the quote disabled; fees are currently set to be covered by ReadAgora. The mobile app shows a request form only when the backend-authoritative quote reports enabled. Transfers remain manual. Do not enable real payouts until the migration is reviewed/applied in production, a current bank/provider quote is verified and entered, and actual reserve cash is confirmed.

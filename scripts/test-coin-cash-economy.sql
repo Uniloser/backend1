@@ -86,10 +86,15 @@ begin
 
   update public.creator_cash_accounts set available_usd_cents=3000
     where writer_id='00000000-0000-4000-8000-000000000002';
-  update public.creator_cashout_policy set enabled=true, payout_processing_enabled=true,
-    provider_name='manual-test-provider', fx_usd_zmw_micros=20000000,
-    supported_methods=array['MOBILE_MONEY'], fee_bps=0
-    where singleton;
+  result := public.configure_creator_cashout_policy(
+    '00000000-0000-4000-8000-000000000003', true,
+    array['MTN_MOBILE_MONEY', 'AIRTEL_MOBILE_MONEY'], 20000000,
+    'fixture bank quote', 'Enable test payouts using a fixture quote'
+  );
+  assert (result->>'enabled')::boolean
+    and result->>'exchangeRateSource'='fixture bank quote'
+    and (select fx_observed_at is not null from creator_cashout_policy where singleton),
+    'manual quote configuration failed or was not timestamped';
   result := public.fund_creator_payout_reserve(
     '00000000-0000-4000-8000-000000000003', 30000, 'test-funding-1', 'Fixture funding',
     '30000000-0000-4000-8000-000000000010'
@@ -102,13 +107,13 @@ begin
   assert (result->>'duplicate')::boolean, 'reserve funding retry was not idempotent';
 
   result := public.request_creator_payout(
-    '00000000-0000-4000-8000-000000000002', 10000, 'MOBILE_MONEY', '+260971234567',
+    '00000000-0000-4000-8000-000000000002', 10000, 'MTN_MOBILE_MONEY', '+260971234567',
     '30000000-0000-4000-8000-000000000011'
   );
   assert result->>'status'='REQUESTED' and result->>'destinationHint'='*********4567', 'payout request failed or exposed destination';
   assert (select available_usd_cents from creator_cash_accounts where writer_id='00000000-0000-4000-8000-000000000002')=2500, 'request did not reserve creator funds';
   result := public.request_creator_payout(
-    '00000000-0000-4000-8000-000000000002', 10000, 'MOBILE_MONEY', '+260971234567',
+    '00000000-0000-4000-8000-000000000002', 10000, 'MTN_MOBILE_MONEY', '+260971234567',
     '30000000-0000-4000-8000-000000000011'
   );
   assert (result->>'duplicate')::boolean, 'payout request retry was not idempotent';
@@ -119,10 +124,14 @@ begin
     'rejected payout did not release creator funds exactly once';
 
   result := public.request_creator_payout(
-    '00000000-0000-4000-8000-000000000002', 10000, 'MOBILE_MONEY', '+260971234567',
+    '00000000-0000-4000-8000-000000000002', 10000, 'MTN_MOBILE_MONEY', '+260971234567',
     '30000000-0000-4000-8000-000000000012'
   );
-  result := public.review_creator_payout((result->>'id')::uuid,'00000000-0000-4000-8000-000000000003','approve','Approve fixture request');
+  begin
+    perform public.review_creator_payout((result->>'id')::uuid,'00000000-0000-4000-8000-000000000003','approve','Approval without verification');
+    raise exception 'expected payout identity verification requirement';
+  exception when raise_exception then if sqlerrm <> 'PAYOUT_IDENTITY_VERIFICATION_REQUIRED' then raise; end if; end;
+  result := public.review_creator_payout((result->>'id')::uuid,'00000000-0000-4000-8000-000000000003','approve','Approve fixture request',true);
   assert result->>'status'='APPROVED' and result->>'reserveState'='HELD', 'payout approval did not hold reserve';
   assert (select available_minor_units from creator_payout_reserve where singleton)=20000
     and (select held_minor_units from creator_payout_reserve where singleton)=10000,
@@ -139,10 +148,10 @@ begin
   assert (select held_minor_units from creator_payout_reserve where singleton)=0, 'paid payout left reserve funds held';
 
   result := public.request_creator_payout(
-    '00000000-0000-4000-8000-000000000002', 10000, 'MOBILE_MONEY', '+260971234567',
+    '00000000-0000-4000-8000-000000000002', 10000, 'MTN_MOBILE_MONEY', '+260971234567',
     '30000000-0000-4000-8000-000000000013'
   );
-  result := public.review_creator_payout((result->>'id')::uuid,'00000000-0000-4000-8000-000000000003','approve','Approve failed fixture request');
+  result := public.review_creator_payout((result->>'id')::uuid,'00000000-0000-4000-8000-000000000003','approve','Approve failed fixture request',true);
   result := public.start_creator_payout_transfer((result->>'id')::uuid,'00000000-0000-4000-8000-000000000003');
   result := public.reconcile_creator_payout((result->>'id')::uuid,'00000000-0000-4000-8000-000000000003','failed',null,'Transfer confirmed not sent');
   assert result->>'status'='FAILED' and result->>'reserveState'='RELEASED', 'failed payout did not enter recovery state';
@@ -154,10 +163,10 @@ begin
     'failed payout did not release held reserve';
 
   result := public.request_creator_payout(
-    '00000000-0000-4000-8000-000000000002', 25000, 'MOBILE_MONEY', '+260971234567',
+    '00000000-0000-4000-8000-000000000002', 25000, 'MTN_MOBILE_MONEY', '+260971234567',
     '30000000-0000-4000-8000-000000000014'
   );
-  result := public.review_creator_payout((result->>'id')::uuid,'00000000-0000-4000-8000-000000000003','approve','Approve pending reserve fixture');
+  result := public.review_creator_payout((result->>'id')::uuid,'00000000-0000-4000-8000-000000000003','approve','Approve pending reserve fixture',true);
   assert result->>'status'='APPROVED' and result->>'reserveState'='AWAITING_RESERVE'
     and result->>'reason'='PAYOUT_RESERVE_INSUFFICIENT', 'insufficient reserve did not retain request unpaid';
   assert (select held_minor_units from creator_payout_reserve where singleton)=0,

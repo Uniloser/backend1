@@ -3,6 +3,8 @@
 -- transfers remain manual and payout_processing_enabled stays false by default.
 begin;
 
+alter table public.creator_cashout_policy add column if not exists fx_source text;
+
 alter table public.creator_payout_requests
   add column if not exists reserve_state text not null default 'NOT_ALLOCATED'
     check (reserve_state in ('NOT_ALLOCATED', 'AWAITING_RESERVE', 'HELD', 'RELEASED', 'PAID')),
@@ -14,6 +16,7 @@ alter table public.creator_payout_requests
   add column if not exists failed_by uuid references public.users(id),
   add column if not exists failure_note text,
   add column if not exists reconciled_by uuid references public.users(id),
+  add column if not exists identity_verified boolean not null default false,
   add column if not exists updated_at timestamptz not null default now();
 alter table public.creator_payout_requests drop constraint if exists creator_payout_requests_payout_method_check;
 alter table public.creator_payout_requests add constraint creator_payout_requests_payout_method_check
@@ -64,12 +67,26 @@ create table if not exists public.creator_payout_audit (
   )),
   previous_status text,
   new_status text not null,
+  identity_verified boolean not null default false,
   note text not null default '',
   provider_reference text,
   created_at timestamptz not null default now()
 );
 create index if not exists creator_payout_audit_request_created_idx
   on public.creator_payout_audit(payout_request_id, created_at);
+
+create table if not exists public.creator_payout_policy_audit (
+  id uuid primary key default gen_random_uuid(),
+  actor_id uuid not null references public.users(id),
+  action text not null check (action in ('CONFIGURED', 'ENABLED', 'DISABLED', 'FX_RATE_UPDATED')),
+  provider_name text not null,
+  supported_methods text[] not null,
+  fx_usd_zmw_micros bigint,
+  fx_source text,
+  fee_bps integer not null,
+  note text not null,
+  created_at timestamptz not null default now()
+);
 
 alter table public.creator_cash_journals drop constraint if exists creator_cash_journals_kind_check;
 alter table public.creator_cash_journals add constraint creator_cash_journals_kind_check
@@ -157,6 +174,7 @@ begin
   select * into policy from public.creator_cashout_policy where singleton for share;
   if not found or not policy.enabled or not policy.payout_processing_enabled
     or policy.provider_name is null or policy.fx_usd_zmw_micros is null
+    or policy.fx_source is null or policy.fx_observed_at is null
     or cardinality(policy.supported_methods) = 0 or policy.fee_bps <> 0 then
     raise exception 'PAYOUTS_DISABLED';
   end if;
@@ -206,6 +224,7 @@ begin
   return jsonb_build_object(
     'enabled', policy.enabled and policy.payout_processing_enabled
       and policy.provider_name is not null and policy.fx_usd_zmw_micros is not null
+      and policy.fx_source is not null and policy.fx_observed_at is not null
       and cardinality(policy.supported_methods) > 0 and policy.fee_bps = 0,
     'currency', policy.currency,
     'minimumMinorUnits', policy.minimum_minor_units,
@@ -215,6 +234,7 @@ begin
     'feePayer', policy.fee_payer,
     'exchangeRateUsdZmwMicros', policy.fx_usd_zmw_micros,
     'exchangeRateObservedAt', policy.fx_observed_at,
+    'exchangeRateSource', policy.fx_source,
     'supportedMethods', policy.supported_methods,
     'availableUsdCents', coalesce(account.available_usd_cents, 0),
     'reason', case
@@ -222,6 +242,7 @@ begin
       when not policy.payout_processing_enabled then 'PAYOUT_PROCESSING_NOT_IMPLEMENTED'
       when policy.provider_name is null then 'PAYOUT_PROVIDER_NOT_CONFIGURED'
       when policy.fx_usd_zmw_micros is null then 'EXCHANGE_RATE_NOT_CONFIGURED'
+      when policy.fx_source is null or policy.fx_observed_at is null then 'EXCHANGE_RATE_SOURCE_NOT_CONFIGURED'
       when cardinality(policy.supported_methods) = 0 then 'PAYOUT_METHODS_NOT_CONFIGURED'
       when policy.fee_bps <> 0 then 'PAYOUT_FEES_NOT_CONFIGURED'
       else null
@@ -231,8 +252,71 @@ end; $$;
 revoke all on function public.get_creator_cashout_quote(uuid) from public, anon, authenticated;
 grant execute on function public.get_creator_cashout_quote(uuid) to service_role;
 
+create or replace function public.configure_creator_cashout_policy(
+  p_actor_id uuid, p_enabled boolean, p_supported_methods text[],
+  p_fx_usd_zmw_micros bigint, p_fx_source text, p_note text
+) returns jsonb language plpgsql security definer set search_path = public as $$
+declare policy public.creator_cashout_policy; next_action text;
+begin
+  if p_enabled is null then raise exception 'PAYOUT_ENABLED_FLAG_REQUIRED'; end if;
+  if p_supported_methods is null or cardinality(p_supported_methods) = 0
+    or not (p_supported_methods <@ array['MTN_MOBILE_MONEY', 'AIRTEL_MOBILE_MONEY']::text[]) then
+    raise exception 'INVALID_MANUAL_PAYOUT_METHODS';
+  end if;
+  if p_fx_usd_zmw_micros is null or p_fx_usd_zmw_micros < 1 or p_fx_usd_zmw_micros > 1000000000000 then
+    raise exception 'INVALID_PAYOUT_FX_RATE';
+  end if;
+  if length(trim(coalesce(p_fx_source, ''))) < 3 or length(trim(p_fx_source)) > 200 then
+    raise exception 'PAYOUT_FX_SOURCE_REQUIRED';
+  end if;
+  if length(trim(coalesce(p_note, ''))) < 3 or length(trim(p_note)) > 1000 then
+    raise exception 'PAYOUT_POLICY_NOTE_REQUIRED';
+  end if;
+
+  select * into policy from public.creator_cashout_policy where singleton for update;
+  if not found then raise exception 'PAYOUT_POLICY_NOT_FOUND'; end if;
+  next_action := case
+    when not p_enabled then 'DISABLED'
+    when policy.fx_usd_zmw_micros is distinct from p_fx_usd_zmw_micros
+      or policy.fx_source is distinct from trim(p_fx_source) then 'FX_RATE_UPDATED'
+    when not policy.enabled or not policy.payout_processing_enabled then 'ENABLED'
+    else 'CONFIGURED'
+  end;
+
+  update public.creator_cashout_policy set
+    enabled = p_enabled,
+    payout_processing_enabled = p_enabled,
+    provider_name = 'MANUAL',
+    supported_methods = p_supported_methods,
+    fx_usd_zmw_micros = p_fx_usd_zmw_micros,
+    fx_source = trim(p_fx_source),
+    fx_observed_at = now(),
+    fee_bps = 0,
+    fee_payer = 'PLATFORM',
+    updated_at = now()
+  where singleton returning * into policy;
+
+  insert into public.creator_payout_policy_audit(
+    actor_id, action, provider_name, supported_methods, fx_usd_zmw_micros, fx_source, fee_bps, note
+  ) values (
+    p_actor_id, next_action, policy.provider_name, policy.supported_methods,
+    policy.fx_usd_zmw_micros, policy.fx_source, policy.fee_bps, trim(p_note)
+  );
+  return jsonb_build_object(
+    'enabled', policy.enabled and policy.payout_processing_enabled,
+    'supportedMethods', policy.supported_methods,
+    'exchangeRateUsdZmwMicros', policy.fx_usd_zmw_micros,
+    'exchangeRateSource', policy.fx_source,
+    'exchangeRateObservedAt', policy.fx_observed_at
+  );
+end; $$;
+revoke all on function public.configure_creator_cashout_policy(uuid, boolean, text[], bigint, text, text) from public, anon, authenticated;
+grant execute on function public.configure_creator_cashout_policy(uuid, boolean, text[], bigint, text, text) to service_role;
+
+drop function if exists public.review_creator_payout(uuid, uuid, text, text);
 create or replace function public.review_creator_payout(
-  p_payout_request_id uuid, p_actor_id uuid, p_decision text, p_note text
+  p_payout_request_id uuid, p_actor_id uuid, p_decision text, p_note text,
+  p_identity_verified boolean default false
 ) returns jsonb language plpgsql security definer set search_path = public as $$
 declare payout public.creator_payout_requests; reserve public.creator_payout_reserve; was_awaiting_reserve boolean := false;
 begin
@@ -255,7 +339,7 @@ begin
     where writer_id = payout.writer_id and reserved_usd_cents >= payout.amount_usd_cents;
     if not found then raise exception 'PAYOUT_ACCOUNT_RESERVATION_MISMATCH'; end if;
     update public.creator_payout_requests set status = 'REJECTED', reserve_state = 'RELEASED',
-      reviewed_by = p_actor_id, review_note = trim(p_note), updated_at = now()
+      reviewed_by = p_actor_id, review_note = trim(p_note), identity_verified = false, updated_at = now()
       where id = payout.id returning * into payout;
     perform public.write_creator_payout_journal(
       'PAYOUT_RELEASE', payout.id::text || ':rejected', payout.writer_id, payout.amount_usd_cents,
@@ -266,12 +350,19 @@ begin
     return jsonb_build_object('id', payout.id, 'status', payout.status, 'reserveState', payout.reserve_state);
   end if;
 
+  if not coalesce(p_identity_verified, false) and not payout.identity_verified then
+    raise exception 'PAYOUT_IDENTITY_VERIFICATION_REQUIRED';
+  end if;
   if payout.status = 'REQUESTED' then
-    update public.creator_payout_requests set reviewed_by = p_actor_id, review_note = trim(p_note), updated_at = now()
+    update public.creator_payout_requests set reviewed_by = p_actor_id, review_note = trim(p_note),
+      identity_verified = true, updated_at = now()
       where id = payout.id returning * into payout;
   elsif payout.status <> 'APPROVED' or payout.reserve_state <> 'AWAITING_RESERVE' then
     raise exception 'PAYOUT_NOT_REVIEWABLE';
   else
+    update public.creator_payout_requests set reviewed_by = p_actor_id, review_note = trim(p_note),
+      identity_verified = true, updated_at = now()
+      where id = payout.id returning * into payout;
     was_awaiting_reserve := true;
   end if;
 
@@ -280,8 +371,8 @@ begin
     update public.creator_payout_requests set status = 'APPROVED', reserve_state = 'AWAITING_RESERVE',
       approved_at = coalesce(approved_at, now()), updated_at = now()
       where id = payout.id returning * into payout;
-    insert into public.creator_payout_audit(payout_request_id, actor_id, action, previous_status, new_status, note)
-      values (payout.id, p_actor_id, 'APPROVED_AWAITING_RESERVE', 'REQUESTED', payout.status, trim(p_note));
+    insert into public.creator_payout_audit(payout_request_id, actor_id, action, previous_status, new_status, identity_verified, note)
+      values (payout.id, p_actor_id, 'APPROVED_AWAITING_RESERVE', 'REQUESTED', payout.status, true, trim(p_note));
     return jsonb_build_object('id', payout.id, 'status', payout.status, 'reserveState', payout.reserve_state,
       'reason', 'PAYOUT_RESERVE_INSUFFICIENT');
   end if;
@@ -302,14 +393,14 @@ begin
   update public.creator_payout_requests set status = 'APPROVED', reserve_state = 'HELD',
     approved_at = coalesce(approved_at, now()), updated_at = now()
     where id = payout.id returning * into payout;
-  insert into public.creator_payout_audit(payout_request_id, actor_id, action, previous_status, new_status, note)
+  insert into public.creator_payout_audit(payout_request_id, actor_id, action, previous_status, new_status, identity_verified, note)
     values (payout.id, p_actor_id,
       case when was_awaiting_reserve then 'RESERVE_ALLOCATED' else 'APPROVED' end,
-      'APPROVED', payout.status, trim(p_note));
+      'APPROVED', payout.status, true, trim(p_note));
   return jsonb_build_object('id', payout.id, 'status', payout.status, 'reserveState', payout.reserve_state);
 end; $$;
-revoke all on function public.review_creator_payout(uuid, uuid, text, text) from public, anon, authenticated;
-grant execute on function public.review_creator_payout(uuid, uuid, text, text) to service_role;
+revoke all on function public.review_creator_payout(uuid, uuid, text, text, boolean) from public, anon, authenticated;
+grant execute on function public.review_creator_payout(uuid, uuid, text, text, boolean) to service_role;
 
 create or replace function public.fund_creator_payout_reserve(
   p_actor_id uuid, p_amount_zmw_minor_units bigint, p_reference text, p_note text, p_idempotency_key uuid
@@ -349,6 +440,7 @@ begin
   select * into payout from public.creator_payout_requests where id = p_payout_request_id for update;
   if not found then raise exception 'PAYOUT_NOT_FOUND'; end if;
   if payout.writer_id = p_actor_id then raise exception 'PAYOUT_SELF_APPROVAL_FORBIDDEN'; end if;
+  if not payout.identity_verified then raise exception 'PAYOUT_IDENTITY_VERIFICATION_REQUIRED'; end if;
   if payout.status <> 'APPROVED' or payout.reserve_state <> 'HELD' then raise exception 'PAYOUT_NOT_READY_FOR_TRANSFER'; end if;
   update public.creator_payout_requests set status = 'PROCESSING', payment_outcome = 'IN_PROGRESS',
     updated_at = now() where id = payout.id returning * into payout;
@@ -438,7 +530,10 @@ grant execute on function public.reconcile_creator_payout(uuid, uuid, text, text
 alter table public.creator_payout_reserve enable row level security;
 alter table public.creator_payout_reserve_movements enable row level security;
 alter table public.creator_payout_audit enable row level security;
-revoke all on public.creator_payout_reserve, public.creator_payout_reserve_movements, public.creator_payout_audit from anon, authenticated;
-grant all on public.creator_payout_reserve, public.creator_payout_reserve_movements, public.creator_payout_audit to service_role;
+alter table public.creator_payout_policy_audit enable row level security;
+revoke all on public.creator_payout_reserve, public.creator_payout_reserve_movements,
+  public.creator_payout_audit, public.creator_payout_policy_audit from anon, authenticated;
+grant all on public.creator_payout_reserve, public.creator_payout_reserve_movements,
+  public.creator_payout_audit, public.creator_payout_policy_audit to service_role;
 
 commit;
