@@ -5,6 +5,7 @@ import * as siteAdsController from '../controllers/siteAds.controller';
 import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
+router.get('/ads/site/all', optionalAuth, asyncHandler(siteAdsController.getActiveAds));
 router.get('/ads/site', optionalAuth, asyncHandler(siteAdsController.getActiveAd));
 
 export default router;

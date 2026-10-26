@@ -1,7 +1,7 @@
 export type StoryCard = {
   id: string; author_id: string; title: string; description: string | null; cover_url: string | null;
   genre: string; tags: string[]; status: 'published' | 'draft'; created_at: string; updated_at: string;
-  view_count: number; content_type?: string; is_ai_generated: boolean;
+  view_count: number; chapters_published?: number; content_type?: string; is_ai_generated: boolean;
   author: { id: string; username: string; display_name: string | null; avatar_url: string | null; is_alpha?: boolean };
 };
 export type Metrics = {

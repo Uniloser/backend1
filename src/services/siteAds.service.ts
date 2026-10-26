@@ -7,3 +7,11 @@ export async function getActiveAd() {
 	const presentation = promotionCreativeSchema.safeParse(ad.presentation ?? {});
 	return { ...ad, presentation: presentation.success ? presentation.data : {} };
 }
+
+export async function getActiveAds() {
+ const ads = await siteAdsRepository.findActiveAds();
+ return ads.map(ad => {
+  const presentation = promotionCreativeSchema.safeParse(ad.presentation ?? {});
+  return { ...ad, presentation: presentation.success ? presentation.data : {} };
+ });
+}

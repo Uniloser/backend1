@@ -1,3 +1,4 @@
+import eventChampionsRouter from './routes/eventChampions.routes';
 import communityRouter from './routes/community.routes';
 const express = require('express') as any;
 const helmet = require('helmet') as any;
@@ -54,6 +55,7 @@ app.use(feedRouter);
 app.use(communityRouter);
 app.use(storyAdsRouter);
 app.use(siteAdsRouter);
+app.use(eventChampionsRouter);
 app.use(promotionsRouter);
 app.use(analyticsRouter);
 app.use(uploadsRouter);
