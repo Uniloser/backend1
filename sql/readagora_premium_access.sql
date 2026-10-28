@@ -23,7 +23,7 @@ create table if not exists public.subscriptions (
   user_id uuid not null references public.users(id) on delete cascade,
   provider text not null,
   provider_subscription_id text,
-  plan text not null check (plan = 'READAGORA_PLUS_WEEKLY'),
+  plan text not null check (plan in ('LIFETIME', 'YEARLY', 'MONTHLY', 'READAGORA_PLUS_WEEKLY')),
   status text not null check (status in ('ACTIVE', 'PAST_DUE', 'CANCELLED', 'EXPIRED', 'GRACE_PERIOD')),
   started_at timestamptz,
   current_period_start timestamptz,
@@ -34,6 +34,11 @@ create table if not exists public.subscriptions (
   updated_at timestamptz not null default now(),
   unique (provider, provider_subscription_id)
 );
+
+-- Existing installations may have been created with a weekly-only plan check.
+alter table public.subscriptions drop constraint if exists subscriptions_plan_check;
+alter table public.subscriptions add constraint subscriptions_plan_check
+  check (plan in ('LIFETIME', 'YEARLY', 'MONTHLY', 'READAGORA_PLUS_WEEKLY'));
 
 create index if not exists subscriptions_user_active_period_idx
   on public.subscriptions (user_id, status, current_period_end desc);

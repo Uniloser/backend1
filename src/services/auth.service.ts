@@ -2,7 +2,17 @@ import { supabase, supabaseAdmin } from '../config/supabase';
 import { env } from '../config/env';
 import { ApiError } from '../utils/ApiError';
 
-export async function signUp(email: string, password: string, username: string) {
+function signupConfirmationRedirect(origin?: string) {
+	if (!origin) return env.frontendUrl;
+	let parsed: URL;
+	try { parsed = new URL(origin); } catch { throw new ApiError(400, 'Sign-up origin is not allowed'); }
+	if (!['http:', 'https:'].includes(parsed.protocol) || parsed.origin !== origin || !env.corsOrigins.includes(parsed.origin)) {
+		throw new ApiError(400, 'Sign-up origin is not allowed');
+	}
+	return `${parsed.origin}/auth/callback`;
+}
+
+export async function signUp(email: string, password: string, username: string, origin?: string) {
 	if (!supabaseAdmin) {
 		throw new ApiError(503, 'Server profile setup is not configured');
 	}
@@ -19,7 +29,7 @@ export async function signUp(email: string, password: string, username: string) 
     email,
     password,
     options: {
-      emailRedirectTo: env.frontendUrl,
+      emailRedirectTo: signupConfirmationRedirect(origin),
       data: { username },
     },
   });

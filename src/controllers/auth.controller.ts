@@ -3,7 +3,7 @@ import { signInSchema, signUpSchema } from '../validators/auth.validator';
 
 export async function signUp(request: any, response: any) {
   const input = signUpSchema.parse(request.body);
-  const session = await authService.signUp(input.email, input.password, input.username);
+  const session = await authService.signUp(input.email, input.password, input.username, request.get?.('origin') ?? request.headers?.origin);
   response.status(201).json({ data: session });
 }
 

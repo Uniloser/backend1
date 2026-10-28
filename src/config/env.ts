@@ -16,9 +16,11 @@ if (!frontendUrl) throw new Error('FRONTEND_URL is required in production.');
 const localDevOrigins = isProduction ? [] : [
 	'http://localhost:8081',
 	'http://localhost:8082',
+	'http://localhost:3002',
 	'http://localhost:5173',
 	'http://127.0.0.1:8081',
 	'http://127.0.0.1:8082',
+	'http://127.0.0.1:3002',
 	'http://127.0.0.1:5173',
 ];
 const corsOrigins = Array.from(new Set([
@@ -44,6 +46,9 @@ export const env = {
 	supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY
 		?? process.env.SUPABASE_SECRET_KEY,
 	revenueCatWebhookAuthToken: process.env.REVENUECAT_WEBHOOK_AUTH_TOKEN,
+	webPushVapidPublicKey: process.env.WEB_PUSH_VAPID_PUBLIC_KEY,
+	webPushVapidPrivateKey: process.env.WEB_PUSH_VAPID_PRIVATE_KEY,
+	webPushVapidSubject: process.env.WEB_PUSH_VAPID_SUBJECT,
 	redisUrl: process.env.REDIS_URL,
 	coverBucket: process.env.SUPABASE_COVER_BUCKET ?? 'covers',
 	avatarBucket: process.env.SUPABASE_AVATAR_BUCKET ?? 'avatars',

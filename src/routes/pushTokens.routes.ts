@@ -6,6 +6,7 @@ import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
 
+router.get('/push-tokens/config', auth, asyncHandler(pushTokensController.getConfig));
 router.post('/push-tokens', auth, asyncHandler(pushTokensController.register));
 router.delete('/push-tokens', auth, asyncHandler(pushTokensController.unregister));
 

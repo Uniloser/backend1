@@ -38,9 +38,9 @@ export async function remove(userId: string, token: string) {
 export async function listForUser(userId: string) {
 	const { data, error } = await getSupabaseAdmin()
 		.from('push_tokens')
-		.select('token')
+		.select('token, platform')
 		.eq('user_id', userId);
 
 	if (error) throw error;
-	return (data ?? []) as Array<{ token: string }>;
+	return (data ?? []) as Array<{ token: string; platform: 'ios' | 'android' | 'web' }>;
 }

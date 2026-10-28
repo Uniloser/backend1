@@ -30,6 +30,7 @@ import mediaRouter from './routes/media.routes';
 import revenueCatRouter from './routes/revenuecat.routes';
 import creatorRouter from './routes/creator.routes';
 import coinsRouter from './routes/coins.routes';
+import subscriptionsRouter from './routes/subscriptions.routes';
 import { errorHandler } from './middleware/errorHandler.middleware';
 import { env } from './config/env';
 
@@ -64,6 +65,7 @@ app.use(mediaRouter);
 app.use(revenueCatRouter);
 app.use(creatorRouter);
 app.use(coinsRouter);
+app.use(subscriptionsRouter);
 app.use(reportsRouter);
 app.use(bookmarksRouter);
 app.use(notificationsRouter);

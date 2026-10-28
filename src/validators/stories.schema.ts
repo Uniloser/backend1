@@ -19,6 +19,7 @@ const storyFields = {
 	content_type: contentType.optional(),
 	is_ai_generated: z.boolean().optional(),
 	is_ai_assisted: z.boolean().optional(),
+	is_mature: z.boolean().optional(),
 	content_warnings: contentWarnings.optional(),
 };
 
@@ -28,7 +29,6 @@ export const updateStorySchema = z.object({
 	...storyFields,
 	status: z.enum(['draft', 'published']).optional(),
 	is_complete: z.boolean().optional(),
-	is_mature: z.boolean().optional(),
 	visibility: z.enum(['public', 'private', 'unlisted']).optional(),
 	access_type: z.enum(['FREE', 'PREMIUM']).optional(),
 	free_chapter_count: z.number().int().min(3).max(10_000).optional(),
@@ -43,13 +43,13 @@ export type CreateStoryInput = {
 	content_type?: 'text' | 'comic';
 	is_ai_generated?: boolean;
 	is_ai_assisted?: boolean;
+	is_mature?: boolean;
 	content_warnings?: Array<'graphic_violence' | 'profanity' | 'sensitive_content' | 'sexual_content'>;
 };
 
 export type UpdateStoryInput = Partial<CreateStoryInput> & {
 	status?: 'draft' | 'published';
 	is_complete?: boolean;
-	is_mature?: boolean;
 	visibility?: 'public' | 'private' | 'unlisted';
 	access_type?: 'FREE' | 'PREMIUM';
 	free_chapter_count?: number;

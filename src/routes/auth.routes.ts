@@ -12,6 +12,3 @@ router.post('/auth/signin', authIpRateLimit, authRateLimit, asyncHandler(authCon
 router.post('/auth/signout', auth, asyncHandler(authController.signOut));
 
 export default router;
-// Public auth route stub.
-// TODO: define signup/signin/session endpoints as public routes; auth.routes.js
-// must not require auth.middleware.js itself.

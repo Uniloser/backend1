@@ -9,10 +9,12 @@ test('story creation accepts the supported disclosure options', () => {
 		genre: 'Fantasy',
 		is_ai_assisted: true,
 		is_ai_generated: false,
+		is_mature: true,
 		content_warnings: ['graphic_violence', 'profanity', 'sensitive_content', 'sexual_content'],
 	});
 
 	assert.equal(result.success, true);
+	assert.equal(result.data.is_mature, true);
 });
 
 test('story disclosure validation rejects unknown, duplicate, and malformed values', () => {

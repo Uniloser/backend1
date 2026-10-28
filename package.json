@@ -41,6 +41,7 @@
     "pino-http": "^11.0.0",
     "sharp": "^0.35.3",
     "uuid": "^14.0.2",
+    "web-push": "^3.6.7",
     "zod": "^4.4.3"
   },
   "devDependencies": {
