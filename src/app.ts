@@ -23,6 +23,7 @@ import walletRouter from './routes/wallet.routes';
 import authRouter from './routes/auth.routes';
 import storyAdsRouter from './routes/storyAds.routes';
 import siteAdsRouter from './routes/siteAds.routes';
+import adPlacementsRouter from './routes/adPlacements.routes';
 import promotionsRouter from './routes/promotions.routes';
 import analyticsRouter from './routes/analytics.routes';
 import importsRouter from './routes/imports.routes';
@@ -44,6 +45,7 @@ app.use(cors({
 	},
 }));
 app.use(morgan('dev'));
+app.use('/api/admin/ads/upload', express.json({ limit: '8mb' }));
 app.use(express.json());
 app.use(authRouter);
 app.use(blocksRouter);
@@ -56,6 +58,7 @@ app.use(feedRouter);
 app.use(communityRouter);
 app.use(storyAdsRouter);
 app.use(siteAdsRouter);
+app.use(adPlacementsRouter);
 app.use(eventChampionsRouter);
 app.use(promotionsRouter);
 app.use(analyticsRouter);
