@@ -7,7 +7,7 @@ const bannerPositionSchema = z.object({
 
 export const promotionCreativeSchema = z.object({
   layout: z.enum(['auto', 'cinematic', 'character-focus', 'minimal', 'scrapbook', 'mood', 'series']).optional(),
-  headline: z.string().max(90).optional(), tagline: z.string().max(150).optional(),
+  headline: z.string().max(90).optional(), tagline: z.string().max(150).optional(), boldText: z.string().max(240).optional(),
   promoImage: z.string().url().regex(/^https?:\/\//).max(2048).optional(),
   backgroundImage: z.string().url().regex(/^https?:\/\//).max(2048).optional(),
   accentColor: z.string().regex(/^#[0-9a-f]{6}$/i).optional(),
@@ -20,7 +20,7 @@ export const promotionCreativeSchema = z.object({
   siteLayout: z.enum(['announcement', 'hero']).optional(),
   bannerSize: z.enum(['compact', 'standard', 'tall', 'custom']).optional(),
   desktopHeight: z.number().int().min(250).max(900).optional(),
-  mobileHeight: z.number().int().min(300).max(900).optional(),
+  mobileHeight: z.number().int().min(100).max(900).optional(),
   positions: z.object({
     brand: bannerPositionSchema.optional(),
     headline: bannerPositionSchema.optional(),
