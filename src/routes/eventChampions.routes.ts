@@ -5,40 +5,37 @@ import { auth, optionalAuth } from '../middleware/auth.middleware';
 import { asyncHandler } from '../utils/asyncHandler';
 import { getPreviousChampion } from '../services/eventChampions.service';
 import { getSupabaseAdmin } from '../config/supabase';
-import { ApiError } from '../utils/ApiError';
+import { findCompetition,competitionDetails,checkEventResult } from '../services/eventCompetitions.service';
 import { z } from 'zod';
 const router = Router();
-router.get('/events/voting', optionalAuth, asyncHandler(async (request: any, response: any) => {
- const db = getSupabaseAdmin();
- const result = await db.from('community_events').select('id,title,status,starts_at,ends_at,voting_starts_at,voting_ends_at')
-  .in('status',['upcoming','live','completed']).not('starts_at','is',null).order('starts_at',{ascending:false}).limit(20);
- if(result.error) throw result.error;
- const boards = await Promise.all((result.data || []).map(async (event: any) => {
-  const [entries,counts,mine] = await Promise.all([
-   db.from('event_story_entries').select('story:stories!inner(id,title,cover_url,genre,status,visibility,moderation_status)').eq('event_id',event.id)
-    .eq('story.status','published').eq('story.visibility','public').eq('story.moderation_status','approved'),
-   db.rpc('event_story_vote_counts',{p_event:event.id}),
-   request.user ? db.from('event_story_votes').select('story_id').eq('event_id',event.id).eq('user_id',request.user.id).maybeSingle() : Promise.resolve({data:null,error:null})
-  ]);
-  if(entries.error) throw entries.error; if(counts.error) throw counts.error; if(mine.error) throw mine.error;
-  const tally = new Map((counts.data || []).map((item: any) => [item.story_id,Number(item.votes)]));
-  const now=Date.now();
-  return { ...event, votingOpen: ['live','upcoming'].includes(event.status) && Date.parse(event.starts_at)<=now && Date.parse(event.ends_at)>now && Date.parse(event.voting_starts_at)<=now && Date.parse(event.voting_ends_at)>now,
-   myVote:mine.data?.story_id || null,
-   entries:(entries.data || []).map((item: any)=>({...item.story,votes:tally.get(item.story.id)||0})).sort((a: any,b: any)=>b.votes-a.votes || a.title.localeCompare(b.title) || a.id.localeCompare(b.id)) };
- }));
- response.set('Cache-Control','no-store'); response.json({data:boards});
+const eventWriteLimit = require('express-rate-limit')({windowMs:60000,limit:20,standardHeaders:true,legacyHeaders:false,keyGenerator:(req:any)=>req.user.id});
+router.get('/events/voting', optionalAuth, asyncHandler(async (request: any,response: any)=>{
+ const db=getSupabaseAdmin();
+ const events=checkEventResult(await db.from('community_events').select('*').in('status',['upcoming','live','completed']).not('starts_at','is',null).order('starts_at',{ascending:false}).limit(20));
+ response.set('Cache-Control','no-store');response.json({data:await Promise.all(events.map((event:any)=>competitionDetails(event,request.user?.id)))});
 }));
-router.post('/events/:eventId/vote', auth, asyncHandler(async (request: any,response: any) => {
- const eventId=z.string().uuid().parse(request.params.eventId);
+router.post('/events/:eventId/vote',auth,eventWriteLimit,asyncHandler(async(request:any,response:any)=>{
+ const id=z.string().uuid().parse(request.params.eventId);
  const {storyId}=z.object({storyId:z.string().uuid()}).strict().parse(request.body);
- const result=await getSupabaseAdmin().rpc('cast_event_story_vote',{p_event:eventId,p_story:storyId,p_user:request.user.id});
- if(result.error) throw new ApiError(400,result.error.message);
+ checkEventResult(await getSupabaseAdmin().rpc('cast_event_story_vote',{p_event:id,p_story:storyId,p_user:request.user.id}));
  response.json({data:{storyId}});
+}));
+router.post('/events/:eventId/entries',auth,eventWriteLimit,asyncHandler(async(request:any,response:any)=>{
+ const id=z.string().uuid().parse(request.params.eventId);
+ const {storyId}=z.object({storyId:z.string().uuid()}).strict().parse(request.body);
+ checkEventResult(await getSupabaseAdmin().rpc('submit_event_story',{p_event:id,p_story:storyId,p_user:request.user.id}));
+ response.status(201).json({data:{storyId,status:'pending'}});
+}));
+router.get('/events/:key/eligible-stories',auth,asyncHandler(async(request:any,response:any)=>{
+ const event=await findCompetition(request.params.key);
+ const offset=z.coerce.number().int().min(0).max(100000).default(0).parse(request.query.offset);
+ let query=getSupabaseAdmin().from('stories').select('id,title,cover_url,genre,description').eq('author_id',request.user.id).eq('status','published').eq('visibility','public').eq('moderation_status','approved').order('id').range(offset,offset+49);
+ if(!event.allow_existing_stories){if(!event.entry_starts_at)return response.json({data:[]});query=query.gte('created_at',event.entry_starts_at);}
+ response.set('Cache-Control','no-store');response.json({data:checkEventResult(await query)});
 }));
 router.get('/events', optionalAuth, asyncHandler(async (_request: any, response: any) => {
     const result = await getSupabaseAdmin().from('community_events')
-        .select('id,title,description,theme,rules,prizes,starts_at,ends_at,voting_starts_at,voting_ends_at,status')
+        .select('*')
         .in('status', ['upcoming', 'live', 'completed']).not('starts_at', 'is', null)
         .order('starts_at', { ascending: false }).limit(200);
     if (result.error && !['42P01', '42703', 'PGRST204', 'PGRST205'].includes(result.error.code)) throw result.error;
@@ -53,5 +50,19 @@ router.get('/events', optionalAuth, asyncHandler(async (_request: any, response:
 router.get('/events/previous-champion', optionalAuth, asyncHandler(async (_request: any, response: any) => {
     response.set('Cache-Control', 'no-store');
     response.json({ data: await getPreviousChampion() });
+}));
+router.get('/events/:key',optionalAuth,asyncHandler(async(request:any,response:any)=>{
+ const event=await findCompetition(z.string().min(1).max(200).parse(request.params.key));
+ const offset=z.coerce.number().int().min(0).max(100000).default(0).parse(request.query.offset);
+ const limit=z.coerce.number().int().min(1).max(100).default(50).parse(request.query.limit);
+ response.set('Cache-Control','no-store');response.json({data:await competitionDetails(event,request.user?.id,offset,limit)});
+}));
+// Public aliases retain the same filtered/paginated DTO for stories, leaderboard and results.
+router.get('/events/:key/:section',optionalAuth,asyncHandler(async(request:any,response:any)=>{
+ z.enum(['stories','leaderboard','results','vote']).parse(request.params.section);
+ const event=await findCompetition(request.params.key);
+ const offset=z.coerce.number().int().min(0).max(100000).default(0).parse(request.query.offset);
+ const details=await competitionDetails(event,request.user?.id,offset);
+ response.set('Cache-Control','no-store');response.json({data:request.params.section==='results'?details.result:request.params.section==='vote'?{storyId:details.myVote,validity:details.myVoteValidity}:details});
 }));
 export default router;

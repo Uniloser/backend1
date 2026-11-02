@@ -9,6 +9,7 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "tsx scripts/test-api.ts",
+    "test:events": "node --test scripts/test-event-competition-api.cjs scripts/test-event-links.cjs",
     "test:promotions": "tsx --test scripts/test-promotions-pricing.ts scripts/test-premium-gem-rewards.ts",
     "test:story-ads": "tsx --test scripts/test-story-ad-rotation.ts",
     "test:stories": "tsx --test scripts/test-story-disclosures.ts",
