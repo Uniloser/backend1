@@ -21,7 +21,9 @@ select public.submit_event_story('20000000-0000-4000-8000-000000000001','1000000
 select public.submit_event_story('20000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000003','00000000-0000-4000-8000-000000000003');
 do $$ begin
  begin perform public.submit_event_story('20000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000002');raise exception 'TEST duplicate entry accepted';exception when others then if sqlerrm like 'TEST%' then raise; end if; end;
- begin perform public.cast_event_story_vote('20000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000004');raise exception 'TEST pending entry accepted';exception when others then if sqlerrm like 'TEST%' then raise; end if; end;
+ if (select eligibility_status from public.event_story_entries where event_id='20000000-0000-4000-8000-000000000001' and story_id='10000000-0000-4000-8000-000000000002')<>'approved' then raise exception 'TEST eligible entry was not automatically approved'; end if;
+ perform public.cast_event_story_vote('20000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000004');
+ delete from public.event_story_votes where event_id='20000000-0000-4000-8000-000000000001';
 end $$;
 select public.review_event_competition('20000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000001','approve_entry','10000000-0000-4000-8000-000000000002',null,'Original story reviewed');
 select public.review_event_competition('20000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000001','approve_entry','10000000-0000-4000-8000-000000000003',null,'Original story reviewed');

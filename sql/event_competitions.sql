@@ -81,7 +81,7 @@ begin
  select * into s from public.stories where id=p_story for share;
  if not found or s.author_id<>p_user or s.status<>'published' or s.visibility<>'public' or s.moderation_status<>'approved' or (not e.allow_existing_stories and s.created_at<e.entry_starts_at) then raise exception 'This story is not eligible'; end if;
  if exists(select 1 from public.event_story_entries where event_id=p_event and author_id=p_user) then raise exception 'You have already entered a story in this event'; end if;
- insert into public.event_story_entries(event_id,story_id,author_id,eligibility_status) values(p_event,p_story,p_user,'pending');
+ insert into public.event_story_entries(event_id,story_id,author_id,eligibility_status) values(p_event,p_story,p_user,'approved');
 end $$;
 create or replace function public.cast_event_story_vote(p_event uuid,p_story uuid,p_user uuid)
 returns void language plpgsql security definer set search_path=public as $$

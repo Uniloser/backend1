@@ -17,7 +17,7 @@ export async function findCompetition(key: string) {
  if(!event) throw new ApiError(404,'Event not found');
  return event;
 }
-export async function competitionDetails(event: any, userId?: string, offset=0, limit=50) {
+export async function competitionDetails(event: any, userId?: string, offset=0, limit=50, storyId?: string) {
  const db=getSupabaseAdmin();
  const [entryResult,mineResult,resultResponse,ownEntry] = await Promise.all([
   db.rpc('event_competition_entries',{p_event:event.id}),
@@ -33,7 +33,7 @@ export async function competitionDetails(event: any, userId?: string, offset=0, 
  const publicRanks=event.show_rankings!==false;
  if(publicRanks) rows.sort((a:any,b:any)=>b.votes-a.votes||a.id.localeCompare(b.id));
  const allRows=rows.map((row:any,index:number)=>({...row,rank:publicRanks?index+1:null,votes:event.show_vote_totals!==false?row.votes:null}));
- rows=allRows.slice(offset,offset+limit);
+ rows=(storyId?allRows.filter((row:any)=>row.id===storyId):allRows).slice(offset,offset+limit);
  let publishedResult=null;
  if(result?.published_at) {
   const winner=checkEventResult(await db.from('stories').select('id,title,description,cover_url,author_id,genre,author:users!stories_author_id_fkey(id,username,display_name)').eq('id',result.story_id).eq('status','published').eq('visibility','public').eq('moderation_status','approved').maybeSingle());

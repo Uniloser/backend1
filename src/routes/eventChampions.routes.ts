@@ -14,6 +14,15 @@ router.get('/events/voting', optionalAuth, asyncHandler(async (request: any,resp
  const events=checkEventResult(await db.from('community_events').select('*').in('status',['upcoming','live','completed']).not('starts_at','is',null).order('starts_at',{ascending:false}).limit(20));
  response.set('Cache-Control','no-store');response.json({data:await Promise.all(events.map((event:any)=>competitionDetails(event,request.user?.id)))});
 }));
+// Resolve approved membership independently of leaderboard pagination.
+router.get('/events/story/:storyId',optionalAuth,asyncHandler(async(request:any,response:any)=>{
+ const storyId=z.string().uuid().parse(request.params.storyId);
+ const db=getSupabaseAdmin();
+ const entries=checkEventResult(await db.from('event_story_entries').select('event_id').eq('story_id',storyId).eq('eligibility_status','approved'))||[];
+ const events=entries.length?checkEventResult(await db.from('community_events').select('*').in('id',entries.map((e:any)=>e.event_id)).in('status',['upcoming','live','completed']).order('starts_at',{ascending:false})):[];
+ const details=await Promise.all(events.map((event:any)=>competitionDetails(event,request.user?.id,0,1,storyId)));
+ response.set('Cache-Control','no-store');response.json({data:details.filter((event:any)=>event.entries.length)});
+}));
 router.post('/events/:eventId/vote',auth,eventWriteLimit,asyncHandler(async(request:any,response:any)=>{
  const id=z.string().uuid().parse(request.params.eventId);
  const {storyId}=z.object({storyId:z.string().uuid()}).strict().parse(request.body);
@@ -24,7 +33,8 @@ router.post('/events/:eventId/entries',auth,eventWriteLimit,asyncHandler(async(r
  const id=z.string().uuid().parse(request.params.eventId);
  const {storyId}=z.object({storyId:z.string().uuid()}).strict().parse(request.body);
  checkEventResult(await getSupabaseAdmin().rpc('submit_event_story',{p_event:id,p_story:storyId,p_user:request.user.id}));
- response.status(201).json({data:{storyId,status:'pending'}});
+ const entry=checkEventResult(await getSupabaseAdmin().from('event_story_entries').select('eligibility_status').eq('event_id',id).eq('story_id',storyId).maybeSingle());
+ response.status(201).json({data:{storyId,status:entry?.eligibility_status||'pending'}});
 }));
 router.get('/events/:key/eligible-stories',auth,asyncHandler(async(request:any,response:any)=>{
  const event=await findCompetition(request.params.key);
